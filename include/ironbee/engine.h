@@ -123,7 +123,17 @@ ib_status_t DLL_PUBLIC ib_shutdown(void);
  * @returns Status code
  */
 ib_status_t DLL_PUBLIC ib_engine_create(ib_engine_t **pib,
-                                        ib_server_t *server);
+                                        const ib_server_t *server);
+
+/**
+ * Get the UUID string associated with an engine instance
+ *
+ * @param[in] ib IronBee engine
+ *
+ * @returns UUID String
+ */
+const char DLL_PUBLIC *ib_engine_uuid(
+    const ib_engine_t *ib);
 
 /**
  * Initialize the engine configuration context.
@@ -148,11 +158,15 @@ ib_status_t DLL_PUBLIC ib_engine_config_started(ib_engine_t *ib,
 /**
  * Inform the engine that the configuration phase is complete
  *
- * @param ib Engine handle
+ * @param[in] ib Engine handle
+ * @param[in] status Configuration status
  *
- * @returns Status code
+ * @returns Status code:
+ *  - IB_OK - All OK
+ *  - Status from ib_context_close() (including the context close functions)
  */
-ib_status_t DLL_PUBLIC ib_engine_config_finished(ib_engine_t *ib);
+ib_status_t DLL_PUBLIC ib_engine_config_finished(ib_engine_t *ib,
+                                                 ib_status_t status);
 
 /**
  * Get the configuration parser
@@ -606,6 +620,18 @@ ib_status_t DLL_PUBLIC ib_context_get(ib_context_t *ctx,
 ib_status_t DLL_PUBLIC ib_conn_create(ib_engine_t *ib,
                                       ib_conn_t **pconn,
                                       void *server_ctx);
+
+/**
+ * Get the count of open connections
+ *
+ * @param[in] ib IronBee engine
+ * @param[out] pcount Pointer to connection count
+ *
+ * @returns Status code
+ */
+ib_status_t DLL_PUBLIC ib_conn_count(
+    const ib_engine_t  *ib,
+    size_t             *pcount);
 
 /**
  * Get per-module per-connection data.

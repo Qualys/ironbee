@@ -127,9 +127,10 @@ struct ib_engine_t {
     const char            *sensor_version;  /**< Sensor version string */
     const char            *sensor_hostname; /**< Sensor hostname */
     ib_cfgparser_t        *cfgparser;       /**< Our configuration parser */
+    const char            *engine_id;       /**< Engine instance UUID */
 
     /// @todo Only these should be private
-    ib_server_t           *server;          /**< Info about the server */
+    const ib_server_t     *server;          /**< Info about the server */
     ib_array_t            *modules;         /**< Array tracking modules */
     ib_array_t            *filters;         /**< Array tracking filters */
     ib_list_t             *contexts;        /**< Configuration contexts */
@@ -145,6 +146,9 @@ struct ib_engine_t {
     void                  *logger_cbdata;   /**< Logger callback data. */
     ib_log_level_fn_t      loglevel_fn;     /**< Log level function. */
     void                  *loglevel_cbdata; /**< Log level callback data. */
+
+    /* @todo TBD: Should this be an ib_hash_t? */
+    ib_list_t             *connection_list; /**< List of connections */
 
     /* Hooks */
     ib_hook_t *hook[IB_STATE_EVENT_NUM + 1]; /**< Registered hook callbacks */

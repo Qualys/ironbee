@@ -61,6 +61,13 @@ struct cfgp_blk_t {
     ib_list_t                *dirs;     /**< Block directives */
 };
 
+/**
+ * Each item in the list of config hooks.
+ */
+typedef struct {
+    ib_config_hook_fn_t      fn;        /**< Hook function */
+    void                    *cbdata;    /**< Hook callback data */
+} ib_config_hook_item_t;
 
 /* -- Configuration Parser Routines -- */
 
@@ -73,6 +80,7 @@ ib_status_t ib_cfgparser_create(ib_cfgparser_t **pcp,
     ib_mpool_t *pool;
     ib_status_t rc;
     ib_cfgparser_t *cp;
+    ib_config_event_t event;
 
     *pcp = NULL;
 
@@ -108,6 +116,17 @@ ib_status_t ib_cfgparser_create(ib_cfgparser_t **pcp,
     rc = ib_hash_create(&(cp->includes), pool);
     if (rc != IB_OK) {
         goto failed;
+    }
+
+    /* Initialize the hook lists */
+    for(event = IB_CONFIG_EVENT_STARTED;
+        event < IB_CONFIG_EVENT_NUM;
+        ++event)
+    {
+        rc = ib_list_create(&(cp->hooks[event]), pool);
+        if (rc != IB_OK) {
+            goto failed;
+        }
     }
 
     /* Other fields are NULLed via calloc */
@@ -146,12 +165,58 @@ static char *find_eol(char *buf, size_t len, size_t *skip)
 }
 
 /// @todo Create a ib_cfgparser_parse_ex that can parse non-files (DBs, etc)
+ib_status_t ib_cfgparser_hook_register(
+    ib_cfgparser_t      *cp,
+    ib_config_event_t    event,
+    ib_config_hook_fn_t  fn,
+    void                *cbdata)
+{
+    assert(cp != NULL);
+    assert( (event >= IB_CONFIG_EVENT_STARTED) &&
+            (event <= IB_CONFIG_EVENT_FINISHED) );
+    assert(hook != NULL);
+
+    ib_status_t rc;
+    ib_config_hook_item_t *item;
+
+    item = ib_mpool_alloc(cp->mp, sizeof(*item));
+    if (item == NULL) {
+        return IB_EALLOC;
+    }
+    item->fn = fn;
+    item->cbdata = cbdata;
+
+    rc = ib_list_push(cp->hooks[event], item);
+    return rc;
+}
+
+static ib_status_t ib_cfgparser_hook_dispatch(
+    ib_cfgparser_t      *cp,
+    ib_config_event_t    event,
+    ib_status_t          status)
+{
+    assert(cp != NULL);
+    assert( (event >= IB_CONFIG_EVENT_STARTED) &&
+            (event <= IB_CONFIG_EVENT_FINISHED) );
+
+    const ib_list_node_t *node;
+
+    IB_LIST_LOOP_CONST(cp->hooks[event], node) {
+        const ib_config_hook_item_t *item =
+            (const ib_config_hook_item_t *)node->data;
+        ib_status_t rc = item->fn(cp, event, status, item->cbdata);
+        if (rc != IB_OK) {
+            return rc;
+        }
+    }
+    return IB_OK;
+}
 
 ib_status_t ib_cfgparser_parse(ib_cfgparser_t *cp,
                                const char *file)
 {
     int ec             = 0;    /* Error code for sys calls. */
-    int fd             = 0;    /* File to read. */
+    int fd             = -1;   /* File to read. */
     unsigned lineno    = 1;    /* Current line number */
     ssize_t nbytes     = 0;    /* Bytes read by one read(). */
     const size_t bufsz = 8192; /* Buffer size. */
@@ -159,20 +224,30 @@ ib_status_t ib_cfgparser_parse(ib_cfgparser_t *cp,
     char *buf          = NULL; /* Buffer. */
     char *eol          = 0;    /* buf[eol] = end of line. */
     char *bol          = 0;    /* buf[bol] = begin line. */
-    char *pathbuf;
-    const char *save_file;     /* File name, used to restore during cleanup  */
+    char *pathbuf;             /* Writable buffer for path */
+    const char *save_file;     /* File name, used to restore during cleanup */
     const char *save_cwd;      /* CWD, used to restore during cleanup  */
 
     ib_status_t rc = IB_OK;
     unsigned error_count = 0;
     ib_status_t error_rc = IB_OK;
 
+    /* If current file is NULL, means the first call.  Inform the hooks */
+    if (cp->cur_file == NULL) {
+        rc = ib_cfgparser_hook_dispatch(cp, IB_CONFIG_EVENT_STARTED, IB_OK);
+        if (rc != IB_OK) {
+            return rc;
+        }
+    }
+
+    /* Open the configuration file now */
     fd = open(file, O_RDONLY);
-    if (fd == -1) {
+    if (fd < 0) {
         ec = errno;
         ib_cfg_log_error(cp, "Could not open config file \"%s\": (%d) %s",
                          file, ec, strerror(ec));
-        return IB_EINVAL;
+        rc = IB_EINVAL;
+        goto cleanup;
     }
 
     /* Store the current file and path in the save_ stack variables */
@@ -186,8 +261,8 @@ ib_status_t ib_cfgparser_parse(ib_cfgparser_t *cp,
         cp->cur_cwd = dirname(pathbuf);
     }
 
+    /* Allocate the buffer for reading */
     buf = (char *)malloc(sizeof(*buf)*bufsz);
-
     if (buf==NULL) {
         ib_cfg_log_error(cp,
                          "Unable to allocate buffer for configuration file.");
@@ -300,18 +375,26 @@ cleanup:
     cp->cur_file = save_file;
     cp->cur_cwd = save_cwd;
 
+    if ( (error_rc != IB_OK) && (rc == IB_OK) ) {
+        rc = error_rc;
+    }
+
+    /* If current file is NULL, means the first call.  Inform the hooks */
+    if (cp->cur_file == NULL) {
+        rc = ib_cfgparser_hook_dispatch(cp, IB_CONFIG_EVENT_STARTED, rc);
+        if (rc != IB_OK) {
+            return rc;
+        }
+    }
+
     ib_cfg_log_debug3(cp,
                       "Done reading config \"%s\" via fd=%d errno=%d",
                       file, fd, errno);
 
-    if ( (error_count == 0) && (rc == IB_OK) ) {
-        return IB_OK;
+    if (rc != IB_OK) {
+        ib_cfg_log_error(cp, "%u Error(s) parsing config file: %s",
+                         error_count, ib_status_to_string(rc));
     }
-    else if (rc == IB_OK) {
-        rc = error_rc;
-    }
-    ib_cfg_log_error(cp, "%u Error(s) parsing config file: %s",
-                     error_count, ib_status_to_string(rc));
     return rc;
 }
 

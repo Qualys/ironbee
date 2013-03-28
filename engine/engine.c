@@ -300,7 +300,8 @@ ib_status_t ib_shutdown(void)
     return IB_OK;
 }
 
-ib_status_t ib_engine_create(ib_engine_t **pib, ib_server_t *server)
+ib_status_t ib_engine_create(ib_engine_t **pib,
+                             const ib_server_t *server)
 {
     ib_mpool_t *pool;
     ib_status_t rc;
@@ -488,6 +489,68 @@ ib_status_t ib_engine_context_create_main(ib_engine_t *ib)
     return IB_OK;
 }
 
+/**
+ * Configuration event handler
+ *
+ * @param[in] parser Configuration parser
+ * @param[in] event Configuration event
+ * @param[in] status Configuration status
+ * @param[in] cbdata Callback data (ib_engine_t *)
+ *
+ * @returns Status code
+ *  - Status code from ib_engine_config_{started,finished}()
+ */
+static ib_status_t ib_engine_config_handler(
+    const ib_cfgpaser_t *parser,
+    ib_config_event_t    event,
+    ib_status_t          status,
+    void                *cbdata)
+{
+    assert(parser != NULL);
+    assert(cbdata != NULL);
+
+    ib_engine_t *ib = (ib_engine_t *)cbdata;
+    ib_status_t  rc;
+
+    switch(event) {
+    case IB_CONFIG_EVENT_STARTED:
+        rc = ib_engine_config_started(ib, cp);
+        break;
+    case IB_CONFIG_EVENT_FINISHED:
+        rc = ib_engine_config_finished(ib, cp);
+        break;
+    default:
+        rc = IB_OK;
+    }
+
+    return rc;
+}
+
+ib_status_t ib_engine_cfgparser_set(ib_engine_t *ib,
+                                    ib_cfgparser_t *cp)
+{
+    assert(ib != NULL);
+    assert(cp != NULL);
+
+    ib_status_t rc;
+
+    /* Register the config started event handler */
+    rc = ib_cfgparser_hook_register(cp, IB_CONFIG_EVENT_STARTED,
+                                    ib_engine_config_handler, ib);
+    if (rc != IB_OK) {
+        return rc;
+    }
+
+    /* Register the config finished event handler */
+    rc = ib_cfgparser_hook_register(cp, IB_CONFIG_EVENT_FINISHED,
+                                    ib_engine_config_handler, ib);
+    if (rc != IB_OK) {
+        return rc;
+    }
+
+    return IB_OK;
+}
+
 ib_status_t ib_engine_config_started(ib_engine_t *ib,
                                      ib_cfgparser_t *cp)
 {
@@ -515,7 +578,8 @@ ib_status_t ib_engine_config_started(ib_engine_t *ib,
     return IB_OK;
 }
 
-ib_status_t ib_engine_config_finished(ib_engine_t *ib)
+ib_status_t ib_engine_config_finished(ib_engine_t *ib,
+                                      ib_status_t status)
 {
     assert(ib != NULL);
     assert(ib->cfg_state == CFG_STARTED);
