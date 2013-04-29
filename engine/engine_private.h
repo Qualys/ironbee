@@ -146,9 +146,7 @@ struct ib_engine_t {
     void                  *logger_cbdata;   /**< Logger callback data. */
     ib_log_level_fn_t      loglevel_fn;     /**< Log level function. */
     void                  *loglevel_cbdata; /**< Log level callback data. */
-
-    /* @todo TBD: Should this be an ib_hash_t? */
-    ib_list_t             *connection_list; /**< List of connections */
+    uint64_t               connection_count; /**< Count of connections */
 
     /* Hooks */
     ib_hook_t *hook[IB_STATE_EVENT_NUM + 1]; /**< Registered hook callbacks */

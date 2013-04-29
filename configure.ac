@@ -451,7 +451,7 @@ dnl Optional build modules
 dnl
 dnl TODO: Make these configure opts
 dnl
-TOPLEVEL_SUBDIRS="util engine servers automata fast modules tools etc docs tests packaging"
+TOPLEVEL_SUBDIRS="util engine engine_manager servers automata fast modules tools etc docs tests packaging"
 LIBS_SUBDIRS="libhtp sqltfn"
 SERVERS_SUBDIRS="apache_httpd2 trafficserver nginx"
 
@@ -574,6 +574,7 @@ AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([libs/Makefile])
 AC_CONFIG_FILES([util/Makefile])
 AC_CONFIG_FILES([engine/Makefile])
+AC_CONFIG_FILES([engine_manager/Makefile])
 AC_CONFIG_FILES([automata/Makefile])
 AC_CONFIG_FILES([automata/bin/Makefile])
 AC_CONFIG_FILES([automata/tests/Makefile])

@@ -47,17 +47,6 @@ extern "C" {
 
 typedef struct ib_dirmap_init_t ib_dirmap_init_t;
 
-/**
- * Configuration parser events.
- */
-typedef enum {
-    IB_CONFIG_EVENT_STARTED,          /**< Configuration has started */
-    IB_CONFIG_EVENT_FINISHED,         /**< Configuration has finished */
-
-    /* Not an event, but keeps track of the number of events. */
-    IB_CONFIG_EVENT_NUM,
-} ib_config_event_t;
-
 /// @todo Should probably be private structure
 struct ib_cfgparser_t {
     ib_engine_t   *ib;                /**< Engine */
@@ -66,7 +55,6 @@ struct ib_cfgparser_t {
     ib_list_t     *block;             /**< Stack tracking blocks */
     ib_hash_t     *includes;          /**< Include tracking hash */
     const char    *linebuf;           /**< Line buffer, used for continuation */
-    ib_list_t     *hooks[IB_CONFIG_EVENT_NUM]; /**< List of hooks */
 
     /* Parsing states */
     ib_context_t  *cur_ctx;           /**< Current context */
@@ -75,25 +63,6 @@ struct ib_cfgparser_t {
     const char    *cur_cwd;           /**< Directory of the current file */
     unsigned int   cur_lineno;        /**< Current line number */
 };
-
-/** Configuration parser callback declarations */
-
-/**
- * Configuration callback hook function
- *
- * @param[in] parser Configuration parser
- * @param[in] event Configuration event
- * @param[in] status Status associated with event
- * @param[in] cbdata Callback data
- *
- * @returns Status code
- */
-typedef ib_status_t (*ib_config_hook_fn_t)(
-    const ib_cfgparser_t   *parser,
-    ib_config_event_type_t  event,
-    ib_status_t             status,
-    void                   *cbdata
-);
 
 /**
  * Directive types.

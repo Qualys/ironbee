@@ -29,6 +29,7 @@
 #include <ironbee/engine.h>
 #include <ironbee/engine_types.h>
 #include <ironbee/list.h>
+#include <ironbee/log.h>
 #include <ironbee/mpool.h>
 #include <ironbee/types.h>
 
@@ -44,30 +45,36 @@ extern "C" {
 */
 
 /**
- * The Engine Manager
+ * The Engine Manager.
+ *
+ * This is the basic "meta-engine" to handle multiple IronBee engines.
  */
-struct ib_engmgr_manager_t {
+struct ib_manager_t {
     const ib_server_t *server;          /**< Server object */
     ib_mpool_t        *mpool;           /**< Engine Manager's Memory pool */
+    const char        *config_file;     /**< IronBee configuration file */
     ib_engine_t       *current_engine;  /**< Current IronBee engine */
     ib_list_t         *engine_list;     /**< List of active engines */
 
     /* Logging */
-    ib_log_level_t             logger_level; /**< Log level to use */
-    ib_engmgr_logger_va_fn_t   logger_va;    /**< va_list logger function */
-    ib_engmgr_logger_buf_fn_t  logger_buf;   /**< Buffer logger function */
-    void                      *logger_data;  /**< Logger callback data */
+    ib_log_level_t     logger_level;    /**< Log level to use */
+    ib_vlogger_fn_t    vlogger_fn;      /**< va_list logger function */
+    ib_logger_fn_t     logger_fn;       /**< Buffer logger function */
+    void              *logger_data;     /**< Logger callback data */
 };
 
 /**
- * The Engine Manager engine wrapper
+ * The Engine Manager engine wrapper.
+ *
+ * There is one wrapper per engine instance.
+ *
+ * @todo Is this required?
  */
-struct ib_engmgr_engwrap_t {
-    ib_engmgr_t       *manager;         /**< The engine manager */
+struct ib_manager_engine_t {
+    ib_manager_t      *manager;         /**< The engine manager */
     ib_engine_t       *engine;          /**< The IronBee engine */
-    size_t             use_count;       /**< Engine use count */
 };
-typedef struct ib_engmgr_engwrap_t ib_engmgr_engwrap_t;
+typedef struct ib_manager_engine_t ib_manager_engine_t;
 
 
 /** @} */
@@ -76,4 +83,4 @@ typedef struct ib_engmgr_engwrap_t ib_engmgr_engwrap_t;
 }
 #endif
 
-#endif /* _IB_ENGINE_MANAGER_H_ */
+#endif /* _IB_ENGINE_MANAGER_PRIVATE_H_ */

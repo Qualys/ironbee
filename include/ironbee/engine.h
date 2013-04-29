@@ -625,13 +625,11 @@ ib_status_t DLL_PUBLIC ib_conn_create(ib_engine_t *ib,
  * Get the count of open connections
  *
  * @param[in] ib IronBee engine
- * @param[out] pcount Pointer to connection count
  *
- * @returns Status code
+ * @returns Connection count
  */
-ib_status_t DLL_PUBLIC ib_conn_count(
-    const ib_engine_t  *ib,
-    size_t             *pcount);
+uint64_t DLL_PUBLIC ib_conn_count(
+    const ib_engine_t  *ib);
 
 /**
  * Get per-module per-connection data.

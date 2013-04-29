@@ -56,7 +56,11 @@ static void addr2str(const struct sockaddr *addr, char *str, int *port);
 
 #define ADDRSIZE 48 /* what's the longest IPV6 addr ? */
 
-ib_engmgr_manager_t DLL_LOCAL *ibmanager = NULL;
+typedef struct {
+    TSTextLogObject  logger;
+    ib_manager_t    *manager;
+} module_data_t;
+static module_data_t module_data = { NULL, NULL };
 #define DEFAULT_LOG "ts-ironbee"
 
 typedef enum {
@@ -91,7 +95,6 @@ static void tx_list_destroy(tx_list *list)
 }
 
 typedef struct {
-    ib_engine_manager_t *manager;
     ib_conn_t *iconn;
     /* store the IPs here so we can clean them up and not leak memory */
     char remote_ip[ADDRSIZE];
@@ -511,7 +514,7 @@ static void ib_ssn_ctx_destroy(ib_ssn_ctx * data)
             tx_list_destroy(data->txns);
             if (data->iconn) {
                 TSDebug("ironbee", "ib_ssn_ctx_destroy: calling ib_state_notify_conn_closed()");
-                ib_state_notify_conn_closed(ironbee, data->iconn);
+                ib_state_notify_conn_closed(data->iconn->ib, data->iconn);
                 TSDebug("ironbee", "CONN DESTROY: conn=%p", data->iconn);
                 ib_conn_destroy(data->iconn);
             }
@@ -576,7 +579,8 @@ static void process_data(TSCont contp, ibd_ctx* ibd)
             ib_core_cfg_t *corecfg = NULL;
             ib_status_t rc;
 
-            rc = ib_core_context_config(ib_context_main(data->engine, &corecfg);
+            rc = ib_core_context_config(ib_context_main(data->engine),
+                                        &corecfg);
             if (rc != IB_OK) {
                 TSError ("Error determining buffering configuration");
             }
@@ -624,7 +628,7 @@ static void process_data(TSCont contp, ibd_ctx* ibd)
         TSDebug("ironbee",
                 "process_data: calling ib_state_notify_%s_body() %s:%d",
                 ibd->ibd->dir_label, __FILE__, __LINE__);
-        (*ibd->ibd->ib_notify_body)(ironbee, data->tx, &itxdata);
+        (*ibd->ibd->ib_notify_body)(data->tx->ib, data->tx, &itxdata);
         TSfree(ibd->data->buf);
         ibd->data->buf = NULL;
         ibd->data->buflen = 0;
@@ -713,7 +717,7 @@ static void process_data(TSCont contp, ibd_ctx* ibd)
                     itxdata.data = (uint8_t *)ibd->data->buf;
                     itxdata.dlen = ibd->data->buflen;
                     TSDebug("ironbee", "process_data: calling ib_state_notify_%s_body() %s:%d", ((ibd->ibd->dir == IBD_REQ)?"request":"response"), __FILE__, __LINE__);
-                    (*ibd->ibd->ib_notify_body)(ironbee, data->tx,
+                    (*ibd->ibd->ib_notify_body)(data->tx->ib, data->tx,
                                                 (ilength!=0) ? &itxdata : NULL);
                     if (IB_HTTP_CODE(data->status)) {  /* We're going to an error document,
                                                         * so we discard all this data
@@ -833,16 +837,16 @@ static int data_event(TSCont contp, TSEvent event, ibd_ctx *ibd)
 
             data = TSContDataGet(contp);
             TSDebug("ironbee", "data_event: calling ib_state_notify_%s_finished()", ((ibd->ibd->dir == IBD_REQ)?"request":"response"));
-            (*ibd->ibd->ib_notify_end)(ironbee, data->tx);
+            (*ibd->ibd->ib_notify_end)(data->tx->ib, data->tx);
             if ( (ibd->ibd->ib_notify_post != NULL) &&
                  (!ib_tx_flags_isset(data->tx, IB_TX_FPOSTPROCESS)) )
             {
-                (*ibd->ibd->ib_notify_post)(ironbee, data->tx);
+                (*ibd->ibd->ib_notify_post)(data->tx->ib, data->tx);
             }
             if ( (ibd->ibd->ib_notify_log != NULL) &&
                  (!ib_tx_flags_isset(data->tx, IB_TX_FLOGGING)) )
             {
-                (*ibd->ibd->ib_notify_log)(ironbee, data->tx);
+                (*ibd->ibd->ib_notify_log)(data->tx->ib, data->tx);
             }
             break;
         case TS_EVENT_VCONN_WRITE_READY:
@@ -1392,7 +1396,7 @@ static ib_status_t start_ib_request(
     }
 
     TSDebug("ironbee", "calling ib_state_notify_request_started()");
-    rc = ib_state_notify_request_started(ironbee, tx, rline);
+    rc = ib_state_notify_request_started(tx->ib, tx, rline);
     if (rc != IB_OK) {
         TSError("Error notifying ironbee request start: %s",
                 ib_status_to_string(rc));
@@ -1435,7 +1439,7 @@ static ib_status_t start_ib_response(
     }
 
     TSDebug("ironbee", "calling ib_state_notify_response_started()");
-    rc = ib_state_notify_response_started(ironbee, tx, rline);
+    rc = ib_state_notify_response_started(tx->ib, tx, rline);
     if (rc != IB_OK) {
         TSError("Error notifying IronBee response start: %s",
                 ib_status_to_string(rc));
@@ -1600,11 +1604,11 @@ static ib_hdr_outcome process_hdr(ib_txn_ctx *data,
     /* Notify headers if present */
     if (nhdrs > 0) {
         TSDebug("ironbee", "process_hdr: notifying header data");
-        rv = (*ibd->ib_notify_header)(ironbee, data->tx, ibhdrs);
+        rv = (*ibd->ib_notify_header)(data->tx->ib, data->tx, ibhdrs);
         if (rv != IB_OK)
             TSError("Error notifying Ironbee header data event");
         TSDebug("ironbee", "process_hdr: notifying header finished");
-        rv = (*ibd->ib_notify_header_finished)(ironbee, data->tx);
+        rv = (*ibd->ib_notify_header_finished)(data->tx->ib, data->tx);
         if (rv != IB_OK)
             TSError("Error notifying Ironbee header finished event");
     }
@@ -1619,7 +1623,7 @@ static ib_hdr_outcome process_hdr(ib_txn_ctx *data,
 
     /* If there's no body in a Request, notify end-of-request */
     if ((ibd->dir == IBD_REQ) && !has_body) {
-        rv = (*ibd->ib_notify_end)(ironbee, data->tx);
+        rv = (*ibd->ib_notify_end)(data->tx->ib, data->tx);
         if (rv != IB_OK)
             TSError("Error notifying Ironbee end of request");
     }
@@ -1681,6 +1685,70 @@ process_hdr_cleanup:
 }
 
 /**
+ * Initialize the IB connection.
+ *
+ * Initializes an IronBee connection from a ATS continuation
+ *
+ * @param[in] iconn IB connection
+ * @param[in] ssn Session context data
+ *
+ * @returns status
+ */
+static ib_status_t ironbee_conn_init(
+    ib_ssn_ctx *ssn)
+{
+    assert(ssn != NULL);
+    ib_status_t            rc;
+    const struct sockaddr *addr;
+    int                    port;
+    ib_conn_t             *iconn = ssn->iconn;
+               
+    /* remote ip */
+    addr = TSHttpTxnClientAddrGet(ssn->txnp);
+    addr2str(addr, ssn->remote_ip, &port);
+
+    iconn->remote_ipstr = ssn->remote_ip;
+    rc = ib_data_add_bytestr(iconn->data,
+                             "remote_ip",
+                             (uint8_t *)iconn->remote_ipstr,
+                             strlen(ssn->remote_ip),
+                             NULL);
+    if (rc != IB_OK) {
+        return rc;
+    }
+
+    /* remote port */
+    iconn->remote_port = port;
+    rc = ib_data_add_num(iconn->data, "remote_port", port, NULL);
+    if (rc != IB_OK) {
+        return rc;
+    }
+
+    /* local end */
+    addr = TSHttpTxnIncomingAddrGet(ssn->txnp);
+
+    addr2str(addr, ssn->local_ip, &port);
+
+    iconn->local_ipstr = ssn->local_ip;
+    rc = ib_data_add_bytestr(iconn->data,
+                             "local_ip",
+                             (uint8_t *)iconn->local_ipstr,
+                             strlen(ssn->local_ip),
+                             NULL);
+    if (rc != IB_OK) {
+        return rc;
+    }
+
+    /* local_port */
+    iconn->local_port = port;
+    rc = ib_data_add_num(iconn->data, "local_port", port, NULL);
+    if (rc != IB_OK) {
+        return rc;
+    }
+    return IB_OK;
+}
+
+/**
  * Plugin for the IronBee ATS.
  *
  * Handles some ATS events.
@@ -1738,12 +1806,18 @@ static int ironbee_plugin(TSCont contp, TSEvent event, void *edata)
                 ib_status_t  rc;
                 ib_engine_t *ib;
 
-                ib = ib_engmgr_current_engine(ibmanager);
+                ib = ib_manager_engine_current(module_data.manager);
                 rc = ib_conn_create(ib, &ssndata->iconn, contp);
                 if (rc != IB_OK) {
                     TSError("ironbee: ib_conn_create: %d\n", rc);
                     return rc; // FIXME - figure out what to do
                 }
+                rc = ironbee_conn_init(ssndata);
+                if (rc != IB_OK) {
+                    TSError("ironbee: ironbee_conn_init: %d\n", rc);
+                    return rc; // FIXME - figure out what to do
+                }
+
                 TSDebug("ironbee", "CONN CREATE: conn=%p", ssndata->iconn);
                 ssndata->txnp = txnp;
                 ssndata->txn_count = ssndata->closing = 0;
@@ -1934,7 +2008,7 @@ static int ironbee_plugin(TSCont contp, TSEvent event, void *edata)
                 ib_state_notify_postprocess(ctx->tx->ib, ctx->tx);
             }
             if (!ib_tx_flags_isset(ctx->tx, IB_TX_FLOGGING)) {
-                ib_state_notify_logging(ironbee, ctx->tx);
+                ib_state_notify_logging(ctx->tx->ib, ctx->tx);
             }
             ib_txn_ctx_destroy(ctx);
             TSContDataSet(contp, NULL);
@@ -1951,9 +2025,17 @@ static int ironbee_plugin(TSCont contp, TSEvent event, void *edata)
             break;
 
         case TS_EVENT_MGMT_UPDATE:
-            TSDebug("ironbee", "SSN Close: %p\n", (void *)contp);
-            ib_engmgr_manager_create_engine(ibmanager, NULL);
+        {
+            ib_status_t  rc;
+
+            TSDebug("ironbee", "Management update\n");
+            rc = ib_manager_engine_create(module_data.manager, NULL);
+            if (rc != IB_OK) {
+                TSError("Failed to create new engine: %s\n",
+                        ib_status_to_string(rc));
+            }
             break;
+        }
 
             /* if we get here we've got a bug */
         default:
@@ -2028,77 +2110,6 @@ static void addr2str(const struct sockaddr *addr, char *str, int *port)
     *port = atoi(serv);
 }
 
-/**
- * Initialize the IB connection.
- *
- * Initializes an IronBee connection from a ATS continuation
- *
- * @param[in,out] ib IronBee engine
- * @param[in] iconn IB connection
- * @param[in] cbdata Callback data
- *
- * @returns status
- */
-static ib_status_t ironbee_conn_init(ib_engine_t *ib,
-                                     ib_state_event_type_t event,
-                                     ib_conn_t *iconn,
-                                     void *cbdata)
-{
-    /* when does this happen? */
-    ib_status_t rc;
-    const struct sockaddr *addr;
-    int port;
-
-    TSCont contp = iconn->server_ctx;
-    ib_ssn_ctx* data = TSContDataGet(contp);
-//  ib_clog_debug(....);
-
-    /* remote ip */
-    addr = TSHttpTxnClientAddrGet(data->txnp);
-
-    addr2str(addr, data->remote_ip, &port);
-
-    iconn->remote_ipstr = data->remote_ip;
-    rc = ib_data_add_bytestr(iconn->data,
-                             "remote_ip",
-                             (uint8_t *)iconn->remote_ipstr,
-                             strlen(data->remote_ip),
-                             NULL);
-    if (rc != IB_OK) {
-        return rc;
-    }
-
-    /* remote port */
-    iconn->remote_port = port;
-    rc = ib_data_add_num(iconn->data, "remote_port", port, NULL);
-    if (rc != IB_OK) {
-        return rc;
-    }
-
-    /* local end */
-    addr = TSHttpTxnIncomingAddrGet(data->txnp);
-
-    addr2str(addr, data->local_ip, &port);
-
-    iconn->local_ipstr = data->local_ip;
-    rc = ib_data_add_bytestr(iconn->data,
-                             "local_ip",
-                             (uint8_t *)iconn->local_ipstr,
-                             strlen(data->local_ip),
-                             NULL);
-    if (rc != IB_OK) {
-        return rc;
-    }
-
-    /* local_port */
-    iconn->local_port = port;
-    rc = ib_data_add_num(iconn->data, "local_port", port, NULL);
-    if (rc != IB_OK) {
-        return rc;
-    }
-    return IB_OK;
-}
-
 
 /* this can presumably be global since it's only setup on init */
 //static ironbee_config_t ibconfig;
@@ -2114,8 +2125,8 @@ static ib_status_t ironbee_conn_init(ib_engine_t *ib,
  */
 static void ibexit(void)
 {
-    TSTextLogObjectDestroy(ironbee_log);
-    ib_engine_destroy(ironbee);
+    ib_manager_destroy(module_data.manager);
+    TSTextLogObjectDestroy(module_data.logger);
 }
 
 /**
@@ -2131,33 +2142,39 @@ static void ibexit(void)
 static ib_status_t ironbee_init(const char *configfile, const char *logfile)
 {
     /* grab from httpd module's post-config */
-    ib_status_t rc;
-    int rv;
-    TSTextLogObject log;
+    ib_status_t      rc;
+    int              rv;
 
     /* success is documented as TS_LOG_ERROR_NO_ERROR but that's undefined.
      * It's actually a TS_SUCCESS (proxy/InkAPI.cc line 6641).
      */
-    rv = TSTextLogObjectCreate(logfile, TS_LOG_MODE_ADD_TIMESTAMP, &log);
+    rv = TSTextLogObjectCreate(logfile,
+                               TS_LOG_MODE_ADD_TIMESTAMP,
+                               &module_data.logger);
     if (rv != TS_SUCCESS) {
         return IB_EUNKNOWN;
     }
 
-    rc = ib_engmgr_manager_create(&ibplugin, &ibmanager);
+    /* Create the IronBee engine manager */
+    rc = ib_manager_create(&ibplugin, configfile, &module_data.manager);
+    if (rc != IB_OK) {
+        return rc;
+    }
+    ib_manager_set_logger_fn(module_data.manager,
+                             NULL, ironbee_logger,
+                             module_data.logger);
+
+    /* Create the initial engine */
+    rc = ib_manager_engine_create(module_data.manager, NULL);
     if (rc != IB_OK) {
         return rc;
     }
 
-    ib_log_set_logger_fn(ironbee, NULL, ironbee_logger, log);
-
+    /* Register our at exit function */
     rv = atexit(ibexit);
     if (rv != 0) {
-        return rv;
+        return IB_EOTHER;
     }
-
-    ib_hook_conn_register(ironbee, conn_opened_event,
-                          ironbee_conn_init, NULL);
-
 
     return rc;
 }
