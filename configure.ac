@@ -58,7 +58,7 @@ case "$OS" in
                     echo
                     echo "   You must have gcc45/gcc46/gcc47 to compile on FreeBSD 7/8/9"
                     echo
-                    exit 1
+                    #exit 1
                 fi
         ;;
 esac

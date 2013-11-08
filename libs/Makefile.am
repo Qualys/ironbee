@@ -26,7 +26,7 @@ endif
 	fi;
 if ENABLE_LUA
 if FREEBSD
-	(cd luajit-2.0-ironbee && gmake amalg TARGET_STRIP=@: CCDEBUG=-g CC=$(CC) LDFLAGS="-lssp_nonshared" STATIC_CC=$(CC) DYNAMIC_CC=$(CC) && touch ../.build-luajit)
+	(cd luajit-2.0-ironbee && gmake amalg TARGET_STRIP=@: CCDEBUG=-g CC=$(CC) LDFLAGS="-lssp_nonshared" STATIC_CC="$(CC) -fPIC" DYNAMIC_CC="$(CC) -fPIC" && touch ../.build-luajit)
 else
 	(cd luajit-2.0-ironbee && $(MAKE) amalg TARGET_STRIP=@: CCDEBUG=-g XCFLAGS=-DLUAJIT_USE_GDBJIT && touch ../.build-luajit)
 endif

@@ -148,7 +148,7 @@ ibmod_user_agent_la_SOURCES = user_agent.c \
 ibmod_user_agent_la_CFLAGS = ${AM_CFLAGS}
 ibmod_user_agent_la_LDFLAGS = $(AM_LDFLAGS)
 if FREEBSD
-ibmod_user_agent_la_LIBADD = $(AM_LIBADD) -liconv
+ibmod_user_agent_la_LIBADD = $(AM_LIBADD)
 endif
 
 ibmod_fast_la_SOURCES = fast.c
