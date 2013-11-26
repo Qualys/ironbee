@@ -5,7 +5,6 @@
 # needed data.  It is strongly suggested to make use of @addmissing and
 # @fillbody modifiers.
 
-require 'pp'
 require 'rexml/document'
 require 'base64'
 $:.unshift(File.expand_path(File.dirname(__FILE__)))
