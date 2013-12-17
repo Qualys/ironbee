@@ -439,7 +439,33 @@ PredicateTrace is extremely expensive and should never be used in production or 
 
 ## Templates [Templates] ##
 
-XXX
+Templates provide a mechanism for constructing complex expressions from a few parameters.  They are similar to using Lua functions to construct Predicate objects, but are expanded by the Predicate module rather than Lua.  For illustration, consider the following two examples.
+
+    local function RequestHeader(which)
+        P.Sub(which, P.Var('REQUEST_HEADERS'))
+    end
+
+    P.define('RequestHeader', ['which'],
+        P.Sub(P.Ref(which), P.Var('REQUEST_HEADERS'))
+    )
+    -- (RequestHeader which) := (sub (ref 'which') (var 'REQUEST_HEADERS'))
+
+The former, the Lua function, can be used, e.g., `RequestHeader('Content-Length')`.  The latter, the Predicate Template, can be used, e.g., `P.RequestHeader('Content-Length')`.  Semantically, they are identical: both mean the request header named "Content-Length".  The former expands in Lua and passes `(sub 'Content-Length' (var 'REQUEST_HEADERS'))` to the Predicate module.  The latter passes `(RequestHeader 'Content-Length')` to the Predicate module, and the module expands it to `(sub 'Content-Length' (var 'REQUEST_HEADERS'))`.
+
+Templates consist of three things: a name, an argument list, and a body.  A new Predicate function with the given name is created.  When it appears in an expression, its arguments are labeled according to the argument list: the first argument is labelled with the first item in the argument list, the second with the second, and so forth.  Then, the body is transformed by replacing any subexpression of the form `(ref X)` with the argument labeled `X`.  Templates can be created in Lua by calling `P.define()`; references can be used in the body via `P.Ref()`.
+
+For situations where they can be used, templates are generally the superior choice.  Advantages over Lua functions include:
+
+- The template name can appear in error messages and introspection, making debugging easier.
+- Less data is communicated from Lua to Predicate.  For complex rule systems built on top of libraries of templates or functions, this can be substantial and templates can improve both memory and time performance.
+
+The main limitation of templates is that they can only do simple substitutions.  Here is an example of a Lua function that has no easy template equivalent:
+
+    def EtcFile(filename)
+      P.Rx('^/etc/' .. filename .. '$', P.Var('REQUEST_URI'))
+    end
+
+`EtcFile` constructs a regexp string from an argument; a task easily done in Lua but difficult in Predicate.  `EtcFile` is best implemented as a Lua function, not as a template.
 
 ## Extending Predicate ##
 
