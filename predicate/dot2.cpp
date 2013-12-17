@@ -44,13 +44,14 @@ namespace {
  * rendered as a discrete node.
  *
  * @param[in] node       Node to check.
- * @param[in] G          Graph; used to check if @a node is a root.
+ * @param[in] G          Graph; used to check if @a node is a root.  May
+ *                       be NULL.
  * @param[in] root_namer Root namer; used to check if one is defined.
  * @return true iff @a node should be absorbed into parent rendering.
  **/
 bool is_absorbable(
     const node_cp&    node,
-    const MergeGraph& G,
+    const MergeGraph* G,
     root_namer_t      root_namer
 )
 {
@@ -58,8 +59,12 @@ bool is_absorbable(
         return false;
     }
 
+    if (! G) {
+        return node->is_literal();
+    }
+
     try {
-        G.root_indices(node);
+        G->root_indices(node);
     }
     catch (enoent) {
         // Not a root.
@@ -305,7 +310,7 @@ typedef boost::function<void(ostream&, string&, const node_cp&)>
  * Base to_dot2() routine.
  *
  * @param[in] out        Where to write dot.
- * @param[in] G          MergeGraph, used to detect roots.
+ * @param[in] G          MergeGraph, used to detect roots.  May be NULL.
  * @param[in] initial    Initial vector for search.  If empty, will default
  *                       to all nodes in graph.
  * @param[in] root_namer How to name roots.
@@ -313,7 +318,7 @@ typedef boost::function<void(ostream&, string&, const node_cp&)>
   **/
 void to_dot2_base(
     ostream&            out,
-    const MergeGraph&   G,
+    const MergeGraph*   G,
     const node_clist_t& initial,
     root_namer_t        root_namer,
     node_hook_t         node_hook
@@ -327,7 +332,7 @@ void to_dot2_base(
         queue = initial;
     }
     else {
-        copy(G.roots().first, G.roots().second, back_inserter(queue));
+        copy(G->roots().first, G->roots().second, back_inserter(queue));
     }
 
     // Header
@@ -409,7 +414,9 @@ void to_dot2_base(
             }
         }
 
-        render_roots(out, node, G, root_namer);
+        if (G) {
+            render_roots(out, node, *G, root_namer);
+        }
     }
 
     // Footer
@@ -501,7 +508,7 @@ void to_dot2(
     root_namer_t      root_namer
 )
 {
-    to_dot2_base(out, G, node_clist_t(), root_namer, node_hook_t());
+    to_dot2_base(out, &G, node_clist_t(), root_namer, node_hook_t());
 }
 
 void to_dot2_validate(
@@ -511,7 +518,7 @@ void to_dot2_validate(
     root_namer_t      root_namer
 )
 {
-    to_dot2_base(out, G, node_clist_t(), root_namer,
+    to_dot2_base(out, &G, node_clist_t(), root_namer,
         bind(nh_validate, validate, _1, _2, _3)
     );
 }
@@ -525,10 +532,21 @@ void to_dot2_value(
 )
 {
     to_dot2_base(
-        out, G, initial, root_namer,
+        out, &G, initial, root_namer,
         boost::bind(nh_value, boost::cref(graph_eval_state), _1, _2, _3)
     );
 }
+
+void to_dot2_tree(
+    std::ostream&  out,
+    const node_cp& top
+)
+{
+    node_clist_t initial;
+    initial.push_back(top);
+    to_dot2_base(out, NULL, initial, root_namer_t(), node_hook_t());
+}
+
 
 } // Predicate
 } // IronBee

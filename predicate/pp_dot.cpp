@@ -75,6 +75,11 @@ bool handle_expr(
     bool                  no_post_validation
 );
 
+bool handle_tree(
+    const P::CallFactory& call_factory,
+    const string&         expr
+);
+
 P::node_p parse_expr(
     const P::CallFactory& call_factory,
     const string&         expr
@@ -121,14 +126,16 @@ int main(int argc, char **argv)
 
     bool expr_mode = false;
     bool graph_mode = false;
+    bool tree_mode = false;
     bool no_post_validation = false;
 
     po::options_description desc("Options:");
     desc.add_options()
         ("help", "display help and exit")
+        ("tree", po::bool_switch(&tree_mode), "tree mode")
         ("expr", po::bool_switch(&expr_mode), "expression mode")
         ("graph", po::bool_switch(&graph_mode), "graph mode")
-        ("no-post-validate", po::bool_switch(&no_post_validation), "no transform")
+        ("no-post-validate", po::bool_switch(&no_post_validation), "no post transform validation")
         ;
 
     po::variables_map vm;
@@ -140,7 +147,12 @@ int main(int argc, char **argv)
     );
     po::notify(vm);
 
-    if (vm.count("help") || (graph_mode && expr_mode)) {
+    size_t num_modes = 0;
+    if (expr_mode) {++num_modes;}
+    if (tree_mode) {++num_modes;}
+    if (graph_mode) {++num_modes;}
+
+    if (vm.count("help") || num_modes > 1) {
         cout << desc << endl;
         return 1;
     }
@@ -192,6 +204,12 @@ int main(int argc, char **argv)
             // If in expression mode and not a define line, treat as a sexpr.
             if (expr_mode) {
                 bool success = handle_expr(call_factory, line, no_post_validation);
+                if (! success) {
+                    return 1;
+                }
+            }
+            else if (tree_mode) {
+                bool success = handle_tree(call_factory, line);
                 if (! success) {
                     return 1;
                 }
@@ -306,6 +324,32 @@ bool handle_expr(
         P::to_dot2_validate(cout, G,
             (no_post_validation ? P::VALIDATE_NONE : P::VALIDATE_POST)
         );
+    }
+    catch (const IronBee::error& e) {
+        cerr << "ERROR: Expression error: "
+             << *boost::get_error_info<IronBee::errinfo_what>(e)
+             << endl;
+        return false;
+    }
+    catch (abort_error) {
+        // Error already reported.
+        return false;
+    }
+
+    return true;
+}
+
+bool handle_tree(
+    const P::CallFactory& call_factory,
+    const string&         expr
+)
+{
+    try {
+        P::node_p node;
+
+        node = parse_expr(call_factory, expr);
+
+        P::to_dot2_tree(cout, node);
     }
     catch (const IronBee::error& e) {
         cerr << "ERROR: Expression error: "

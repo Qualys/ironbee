@@ -93,6 +93,17 @@ void to_dot2_value(
     root_namer_t root_namer =     root_namer_t()
 );
 
+/*
+ * Write tree rooted at @a top out to @a out in GraphViz format.
+ *
+ * @param[in] out Where to write output.
+ * @param[in] top Top of tree.
+ **/
+void to_dot2_tree(
+    std::ostream&  out,
+    const node_cp& top
+);
+
 } // Predicate
 } // IronBee
 
