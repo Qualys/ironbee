@@ -49,7 +49,7 @@ Intrepreting, "is really long" to mean "has a length greater than 1000", we can 
     P.Gt(1000, P.Length(P.Var('REQUEST_URI')))
     -- (gt 1000 (transformation 'length' (var 'REQUEST_URI')))
 
-This is Lua code.  `P.Gt()` is a Lua function that produces a *predicate object* from its arguments, which are in turn predicate objects (or Lua literals).  The Waggle `predicate()` directive understands predicate objects and turns them into sexprs to pass on to Predicate.  For more information on Predicate objects, see XXX.
+This is Lua code.  `P.Gt()` is a Lua function that produces a *predicate object* from its arguments, which are in turn predicate objects (or Lua literals).  The Waggle `predicate()` directive understands predicate objects and turns them into sexprs to pass on to Predicate.  For more information on Predicate objects, see [Lua Frontend].
 
 Predicate expressions are built up by composing *predicate functions* along with literals.
 
@@ -483,6 +483,16 @@ There are a few Predicate functions that are intended for developing and testing
 `P.Sequence()` is used to construct sequences of values.  `P.Identity(v)` behaves like `v`.  Both of these have little use outside of testing Predicate; they are detailed in the reference manual.
 
 # Part 3: Additional Topics
+
+## Lua Frontend [Lua Frontend] ##
+
+The Lua frontend provides a variety of functions for producing predicate objects.  Predicate objects in turn can be used to create further predicate objects or to generate a sexpr.  The waggle `predicate` modifier understands predicate objects and automatically generates a sexpr and passes it to Predicate.
+
+All Predicate calls are available via a `P.X` function.  For example, the `gt` ppredicate function is available via `P.Gt`.  Many IronBee transformations and operators are also directly available.  For example, `P.Rx(pattern, value)` is equivalent to `P.Operator('rx', pattern, value)`.
+
+There are also functions to direct construct expressions.  `P.String(value)` and `P.Number(value)` create literals; `P.Null, P.True, and P.False` are constants that create `null`, `(true)` and `(false)`, respectively; `P.Call(function, args)` creates a function call; `P.Raw(sexpr)` creates `sexpr` and can be used to mix directly written sexprs with predicate objects.
+
+Finally, the predicate objects created by the functions described above provide functionality through operators and methods: `+` for and, `/` for or, unary `-` for not, binary `-` for and-not, and `^` for xor.  Many predicate calls are available as predicate object methods which pass themselves in as the last argument.  For example, `P.Var('REQUEST_METHOD'):eq('GET')` is equivalent to `P.Eq('GET', P.Var('REQUEST_METHOD))`.  
 
 ## Tools ##
 
