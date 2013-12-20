@@ -92,8 +92,7 @@ When and whether to use such shortcuts is a matter of style.  Use them if you be
 Let's look for a suspicious filename in every parameter:
 
         P.Rx('/etc/(?:passwd|shadow)', P.Var('ARGS'))
-
-<pre class=sexpr>(operator 'rx' '/etc/(?:passwd|shadow)' (var 'ARGS'))</pre>
+        -- (operator 'rx' '/etc/(?:passwd|shadow)' (var 'ARGS'))
 
 `P.Rx()` is an example of using an IronBee operator.  IronBee operators are functions provided by modules that can be used by any rule system, not just Predicate.
 
@@ -106,7 +105,6 @@ Now let's limit our regexp to only `GET` and `POST` requests:
             P.Eq('POST', P.Var('REQUEST_METHOD'))
         )
     )
-
     -- (and
     --     (operator 'rx' '/etc/(?:passwd|shadow)' (var 'ARGS'))
     --     (or
@@ -217,7 +215,6 @@ Since `ApplyToPost` is false, this expressions will always be false, no matter w
 ## Expressions and the DAG
 
 ### Expression Trees ###
-
 
 Any predicate expression can be represented as a tree.  For example:
 
@@ -582,12 +579,12 @@ Dynamic Vars
 : A dynamic var, implemented as a dynamic list field, is effectively a function that takes a string and returns a collection.  Predicate can use dynamic vars via `P.Ask()`.  Dynamic vars must obey the same conditions as vars.
 
 Operator
-: An operator is a function that takes a string literal and a single value and outputs true or false and an optional *capture collection*.  Predicate can access operators via `P.Operator()` and `P.FOperator()`.  Operators are registered via XXX.
+: An operator is a function that takes a string literal and a single value and outputs true or false and an optional *capture collection*.  Predicate can access operators via `P.Operator()` and `P.FOperator()`.
 
 Transformation
-: A transformation is a function that takes a value and returns a value.  Predicate can access transformations via `P.Transformation()`.  Transformations are registered via XXX.
+: A transformation is a function that takes a value and returns a value.  Predicate can access transformations via `P.Transformation()`.
 
 Call Node
-: A new type of Call Node can be defined by creating, in C++, a descendent of `Predicate::Call`, implementing certain vitual methods, and informing Predicate of it via XXX.  Predicate can access new call nodes via `P.Call()`.  Call Nodes are dismayingly tricky to properly implement, but are the only way to get advanced functionality such as multiple arguments, validation, or transformations.  The interface for implementing Call Nodes is likely to change.  Finally, unlike the methods above, new Call Nodes will only be usable by Predicate and unavailable to other rule systems or modules.
+: A new type of Call Node can be defined by creating, in C++, a descendent of `Predicate::Call`, implementing certain vitual methods, and informing Predicate of it.  Predicate can access new call nodes via `P.Call()`.  Call Nodes are dismayingly tricky to properly implement, but are the only way to get advanced functionality such as multiple arguments, validation, or transformations.  The interface for implementing Call Nodes is likely to change.  Finally, unlike the methods above, new Call Nodes will only be usable by Predicate and unavailable to other rule systems or modules.
 
 If it all possible, use one of the first four methods.  Those are comparitively simple and will seemlessly work with other rule systems and modules.
