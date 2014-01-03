@@ -901,12 +901,14 @@ static ib_status_t execute_tfns(const ib_rule_exec_t *rule_exec,
  * @param[in] rule_exec Rule execution object
  * @param[in] result Rule execution result
  * @param[in] action The action to execute
+ * @param[out] parc Pointer to action result code (or NULL)
  *
  * @returns Status code
  */
 static ib_status_t execute_action(const ib_rule_exec_t *rule_exec,
                                   ib_num_t result,
-                                  const ib_action_inst_t *action)
+                                  const ib_action_inst_t *action,
+                                  ib_status_t *parc)
 {
     ib_status_t   rc;
     const char   *name = (result != 0) ? "True" : "False";
@@ -917,11 +919,15 @@ static ib_status_t execute_action(const ib_rule_exec_t *rule_exec,
 
     /* Run it, check the results */
     rc = ib_action_execute(rule_exec, action);
-    if ( rc != IB_OK ) {
+    if (rc != IB_OK) {
         ib_rule_log_error(rule_exec,
                           "Action \"%s\" returned an error: %s",
                           action->action->name, ib_status_to_string(rc));
     }
+    if (parc != NULL) {
+        *parc = rc;
+    }
+
 
     return IB_OK;
 }
@@ -933,19 +939,24 @@ static ib_status_t execute_action(const ib_rule_exec_t *rule_exec,
  * @param[in] actions List of actions to execute
  * @param[in] name Name for logging
  * @param[in] log Log the actions?
+ * @param[out] parc Pointer to action result code (or NULL)
  *
  * @returns Status code
  */
 static ib_status_t execute_action_list(const ib_rule_exec_t *rule_exec,
                                        const ib_list_t *actions,
                                        const char *name,
-                                       bool log)
+                                       bool log,
+                                       ib_status_t *parc)
 {
     assert(rule_exec != NULL);
 
     const ib_list_node_t *node = NULL;
     ib_status_t           rc = IB_OK;
 
+    if (parc != NULL) {
+        *parc = IB_OK;
+    }
     if (actions == NULL) {
         return IB_OK;
     }
@@ -966,19 +977,23 @@ static ib_status_t execute_action_list(const ib_rule_exec_t *rule_exec,
         const ib_action_inst_t *action = (const ib_action_inst_t *)node->data;
 
         /* Execute the action */
-        arc = execute_action(rule_exec, rule_exec->cur_result, action);
+        rc = execute_action(rule_exec, rule_exec->cur_result, action, &arc);
         if (log) {
             ib_rule_log_exec_add_action(rule_exec->exec_log, action, arc);
         }
 
         /* Record an error status code unless a block rc is to be reported. */
-        if ( (arc != IB_OK) && log) {
-            ib_rule_log_error(rule_exec,
-                              "Action %s/\"%s\" returned an error: %s",
-                              name,
-                              action->action->name,
-                              ib_status_to_string(arc));
-            rc = arc;
+        if (arc != IB_OK) {
+            if (log) {
+                ib_rule_log_error(rule_exec,
+                                  "Action %s/\"%s\" returned an error: %s",
+                                  name,
+                                  action->action->name,
+                                  ib_status_to_string(arc));
+            }
+            if (parc != NULL) {
+                *parc = arc;
+            }
         }
     }
 
@@ -1037,9 +1052,9 @@ static ib_status_t store_results(ib_rule_exec_t *rule_exec,
  *
  * @param[in] rule_exec Rule execution object
  *
- * @returns Action status code
+ * @returns Status code
  */
-static ib_status_t execute_rule_actions(const ib_rule_exec_t *rule_exec)
+static ib_status_t execute_rule_actions(ib_rule_exec_t *rule_exec)
 {
     assert(rule_exec != NULL);
     assert(rule_exec->rule != NULL);
@@ -1049,6 +1064,7 @@ static ib_status_t execute_rule_actions(const ib_rule_exec_t *rule_exec)
     const char         *name = NULL;
     const ib_list_t    *aux_actions = NULL;
     ib_status_t         rc;
+    ib_status_t         arc = IB_OK;
 
     /* Choose the appropriate action list */
     if (rule_exec->cur_status == IB_OK) {
@@ -1067,7 +1083,7 @@ static ib_status_t execute_rule_actions(const ib_rule_exec_t *rule_exec)
     ib_rule_log_exec_add_result(rule_exec->exec_log,
                                 rule_exec->cur_value,
                                 rule_exec->cur_result);
-    rc = execute_action_list(rule_exec, main_actions, name, true);
+    rc = execute_action_list(rule_exec, main_actions, name, true, &arc);
     if (rc != IB_OK) {
         ib_rule_log_error(rule_exec,
                           "Error executing action(s) for rule: %s",
@@ -1076,7 +1092,8 @@ static ib_status_t execute_rule_actions(const ib_rule_exec_t *rule_exec)
 
     /* Run any auxiliary actions, ignore result, don't log */
     execute_action_list(rule_exec, aux_actions, "Auxiliary",
-                        ib_rule_log_level(rule_exec->tx->ctx) >= IB_LOG_DEBUG);
+                        ib_rule_log_level(rule_exec->tx->ctx) >= IB_LOG_DEBUG,
+                        NULL);
 
     /* Return the primary actions' result code */
     return rc;
