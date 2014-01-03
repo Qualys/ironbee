@@ -170,6 +170,7 @@ struct ib_rule_exec_t {
     ib_status_t             cur_status;  /**< Current execution status. */
     ib_num_t                cur_result;  /**< Current execution result. */
     const ib_field_t       *cur_value;   /**< Current value */
+    ib_status_t             action_status;/**< Status of actions */
 
     /* Logging objects */
     ib_rule_log_tx_t       *tx_log;      /**< Rule TX logging object */

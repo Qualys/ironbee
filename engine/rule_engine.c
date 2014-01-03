@@ -1066,6 +1066,9 @@ static ib_status_t execute_rule_actions(ib_rule_exec_t *rule_exec)
     ib_status_t         rc;
     ib_status_t         arc = IB_OK;
 
+    /* Default to no actions failed. */
+    rule_exec->action_status = IB_OK;
+
     /* Choose the appropriate action list */
     if (rule_exec->cur_status == IB_OK) {
         if (rule_exec->cur_result != 0) {
@@ -1089,6 +1092,7 @@ static ib_status_t execute_rule_actions(ib_rule_exec_t *rule_exec)
                           "Error executing action(s) for rule: %s",
                           ib_status_to_string(rc));
     }
+    rule_exec->action_status = arc;
 
     /* Run any auxiliary actions, ignore result, don't log */
     execute_action_list(rule_exec, aux_actions, "Auxiliary",
