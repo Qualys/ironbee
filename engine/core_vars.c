@@ -60,6 +60,8 @@ indexed_key_t indexed_keys[] = {
 {"auth_password",         IB_PHASE_REQUEST_HEADER,  IB_PHASE_REQUEST_HEADER},
 {"auth_type",             IB_PHASE_REQUEST_HEADER,  IB_PHASE_REQUEST_HEADER},
 {"auth_username",         IB_PHASE_REQUEST_HEADER,  IB_PHASE_REQUEST_HEADER},
+{"conn_uuid",             IB_PHASE_REQUEST_HEADER,  IB_PHASE_REQUEST_HEADER},
+{"engine_uuid",           IB_PHASE_REQUEST_HEADER,  IB_PHASE_REQUEST_HEADER},
 {"request_body_params",   IB_PHASE_REQUEST,         IB_PHASE_REQUEST},
 {"request_content_type",  IB_PHASE_REQUEST_HEADER,  IB_PHASE_REQUEST_HEADER},
 {"request_cookies",       IB_PHASE_REQUEST_HEADER,  IB_PHASE_REQUEST_HEADER},
@@ -87,7 +89,8 @@ indexed_key_t indexed_keys[] = {
 {"response_line",         IB_PHASE_RESPONSE_HEADER, IB_PHASE_RESPONSE_HEADER},
 {"response_message",      IB_PHASE_RESPONSE_HEADER, IB_PHASE_RESPONSE_HEADER},
 {"response_protocol",     IB_PHASE_RESPONSE_HEADER, IB_PHASE_RESPONSE_HEADER},
-{"response_status",       IB_PHASE_RESPONSE_HEADER, IB_PHASE_RESPONSE_HEADER}
+{"response_status",       IB_PHASE_RESPONSE_HEADER, IB_PHASE_RESPONSE_HEADER},
+{"tx_uuid",               IB_PHASE_REQUEST_HEADER,  IB_PHASE_REQUEST_HEADER},
 };
 
 static const ib_tx_flag_map_t core_tx_flag_map[] = {
@@ -291,6 +294,51 @@ static ib_status_t core_gen_flags_collection(ib_engine_t *ib,
         else {
             ib_tx_flags_unset(tx, flag->tx_flag);
         }
+    }
+
+    return IB_OK;
+}
+
+/**
+ * Generate the UUID fields
+ *
+ * @param[in] ib IronBee engine
+ * @param[in] tx Transaction
+ * @param[in] event IronBee event
+ * @param[in] cbdata Callback data (unused)
+ *
+ * @returns Status code
+ */
+static ib_status_t core_gen_uuids(ib_engine_t *ib,
+                                  ib_tx_t *tx,
+                                  ib_state_event_type_t event,
+                                  void *cbdata)
+{
+    assert(ib != NULL);
+    assert(tx != NULL);
+    assert(tx->var_store != NULL);
+    assert(event == tx_started_event);
+
+    const char *id;
+
+    id = tx->conn->id;
+    if (id != NULL) {
+        core_gen_tx_bytestr_alias2(tx, "conn_uuid", id, strlen(id));
+    }
+
+    id = ib_engine_instance_uuid(ib);
+    if (id != NULL) {
+        core_gen_tx_bytestr_alias2(tx, "engine_uuid", id, strlen(id));
+    }
+
+    id = ib_engine_sensor_id(ib);
+    if (id != NULL) {
+        core_gen_tx_bytestr_alias2(tx, "sensor_uuid", id, strlen(id));
+    }
+
+    id = tx->id;
+    if (id != NULL) {
+        core_gen_tx_bytestr_alias2(tx, "tx_uuid", id, strlen(id));
     }
 
     return IB_OK;
@@ -703,6 +751,9 @@ ib_status_t ib_core_vars_init(ib_engine_t *ib,
 
     ib_hook_tx_register(ib, tx_started_event,
                         core_gen_flags_collection, NULL);
+
+    ib_hook_tx_register(ib, tx_started_event,
+                        core_gen_uuids, NULL);
 
     ib_hook_tx_register(ib, request_header_finished_event,
                         core_gen_request_header_fields, NULL);
