@@ -158,6 +158,11 @@ ibmod_abort_la_SOURCES    = abort.c
 ibmod_abort_la_CFLAGS     = ${AM_CFLAGS}
 ibmod_abort_la_LDFLAGS    = $(AM_LDFLAGS)
 
+module_LTLIBRARIES       += ibmod_defvar.la
+ibmod_defvar_la_SOURCES   = defvar.c
+ibmod_defvar_la_CFLAGS    = ${AM_CFLAGS}
+ibmod_defvar_la_LDFLAGS   = $(AM_LDFLAGS)
+
 module_LTLIBRARIES       += ibmod_testops.la
 ibmod_testops_la_SOURCES  = testops.c
 ibmod_testops_la_CFLAGS   = ${AM_CFLAGS}
