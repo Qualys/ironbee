@@ -21,8 +21,24 @@
  *
  * This is a module that defines some rule operators for development purposes.
  *
- * @note This module can be disabled by configuring with the "--disable-devel"
- * option.
+ * The operators defined here are:
+ * - <tt>true</tt>: Always returns True.
+ * - <tt>false</tt>: Always returns False.
+ * - <tt>exists</tt>: Returns True if the rule target exists.
+ * - <tt>is_int</tt>: Returns True if the rule target type is INT.
+ * - <tt>is_time</tt>: Returns True if the rule target type is TIME.
+ * - <tt>is_float</tt>: Returns True if the rule target type is FLOAT.
+ * - <tt>is_bytestr</tt>: Returns True if the rule target type is BYTESTR.
+ * - <tt>is_sbuffer</tt>: Returns True if the rule target type is SBUFFER.
+ *
+ * Examples:
+ * - <tt>rule x \@true x id:1 setvar:x=4</tt>
+ * - <tt>rule x \@false x id:2 !setvar:x=5</tt>
+ * - <tt>rule y \@exists x id:3 abortIf:OpTrue</tt>
+ * - <tt>rule z \@is_int x id:4 abortIf:OpFalse</tt>
+ * - <tt>rule n \@is_float x id:5 abortIf:OpFalse</tt>
+ * - <tt>rule s \@is_bytestr x id:6 abortIf:OpFalse</tt>
+ * - <tt>rule s \@is_sbuffer x id:5 abortIf:OpTrue</tt>
  *
  * @author Nick LeRoy <nleroy@qualys.com>
  */
@@ -53,26 +69,21 @@
 /* Declare the public module symbol. */
 IB_MODULE_DECLARE();
 
-/* IsType operators */
-typedef enum {
-    IsTypeByteStr,
-    IsTypeInt,
-    IsTypeFloat,
-} istype_t;
+/** is_type operator data */
+struct  istype_op_t {
+    const char        *name;      /**< Operator name. */
+    ib_ftype_t         type;      /**< The matching IB field type. */
+};
+typedef struct istype_op_t istype_op_t;
 
-/* IsType operator data */
-typedef struct {
-    istype_t    istype;
-    int         numtypes;
-    ib_ftype_t  type;
-} istype_params_t;
-typedef istype_params_t istype_params_t;
-
-/* IsType operators data */
-static istype_params_t istype_params[] = {
-    { IsTypeByteStr, 1, IB_FTYPE_BYTESTR },
-    { IsTypeInt,     1, IB_FTYPE_NUM },
-    { IsTypeFloat,   1, IB_FTYPE_FLOAT },
+/** IsType operators data */
+static const istype_op_t istype_ops[] = {
+    { "is_int",     IB_FTYPE_NUM },
+    { "is_float",   IB_FTYPE_FLOAT },
+    { "is_time",    IB_FTYPE_TIME },
+    { "is_bytestr", IB_FTYPE_BYTESTR },
+    { "is_sbuffer", IB_FTYPE_SBUFFER },
+    { NULL,         IB_FTYPE_GENERIC },
 };
 
 /**
@@ -96,11 +107,14 @@ static ib_status_t op_true_execute(
     void             *cbdata
 )
 {
-    /* Always return true */
+    assert(tx != NULL);
+    assert(result != NULL);
+
+    /* Always return true. */
     *result = 1;
 
-    /* Set the capture */
-    if (capture != NULL && *result) {
+    /* Set the capture. */
+    if ((capture != NULL) && *result) {
         ib_capture_clear(capture);
         ib_capture_set_item(capture, 0, tx->mp, field);
     }
@@ -129,7 +143,7 @@ static ib_status_t op_false_execute(
 )
 {
     *result = 0;
-    /* Don't check for capture, because we always return zero */
+    /* Don't check for capture, because we always return zero. */
 
     return IB_OK;
 }
@@ -155,11 +169,14 @@ static ib_status_t op_exists_execute(
     void             *cbdata
 )
 {
-    /* Return true of field is not NULL */
+    assert(tx != NULL);
+    assert(result != NULL);
+
+    /* Return true of field is not NULL. */
     *result = (field != NULL);
 
-    /* Set the capture */
-    if (capture != NULL && *result) {
+    /* Set the capture. */
+    if ((capture != NULL) && *result) {
         ib_capture_clear(capture);
         ib_capture_set_item(capture, 0, tx->mp, field);
     }
@@ -175,7 +192,7 @@ static ib_status_t op_exists_execute(
  * @param[in] field The field to operate on.
  * @param[in] capture If non-NULL, the collection to capture to.
  * @param[out] result The result of the operator 1=true 0=false.
- * @param[in] cbdata Callback data (istype_params_t pointer).
+ * @param[in] cbdata Callback data (@ref istype_op_t).
  *
  * @returns Status code
  */
@@ -188,11 +205,23 @@ static ib_status_t op_istype_execute(
     void             *cbdata
 )
 {
-    assert(field != NULL);
+    assert(tx != NULL);
     assert(cbdata != NULL);
-    const istype_params_t *params = cbdata;
 
-    *result = (params->type == field->type);
+    const istype_op_t *op = cbdata;
+
+    /* Return true if the field type matches the parameter type. */
+    *result = ((field != NULL) && (op->type == field->type));
+
+    if (*result == 0) {
+        cbdata = NULL;
+    }
+
+    /* Set the capture. */
+    if ((capture != NULL) && *result) {
+        ib_capture_clear(capture);
+        ib_capture_set_item(capture, 0, tx->mp, field);
+    }
 
     return IB_OK;
 }
@@ -209,23 +238,28 @@ static ib_status_t op_istype_execute(
 static ib_status_t testops_init(
     ib_engine_t *ib,
     ib_module_t *module,
-    void        *cbdata)
+    void        *cbdata
+)
 {
-    ib_status_t rc;
+    assert(ib != NULL);
+    assert(module != NULL);
 
-    /**
-     * Simple True / False operators.
+    ib_status_t        rc;
+    const istype_op_t *istype_op;
+
+    /*
+     * Register the true / false / exists operators.
      */
 
-    /* Register the True operator */
+    /* Register the true operator. */
     rc = ib_operator_create_and_register(
         NULL,
         ib,
-        "True",
+        "true",
         ( IB_OP_CAPABILITY_ALLOW_NULL |
           IB_OP_CAPABILITY_NON_STREAM |
-              IB_OP_CAPABILITY_STREAM |
-        IB_OP_CAPABILITY_CAPTURE ),
+          IB_OP_CAPABILITY_STREAM     |
+          IB_OP_CAPABILITY_CAPTURE ),
         NULL, NULL, /* No create function */
         NULL, NULL, /* no destroy function */
         op_true_execute, NULL);
@@ -233,14 +267,14 @@ static ib_status_t testops_init(
         return rc;
     }
 
-    /* Register the False operator */
+    /* Register the false operator. */
     rc = ib_operator_create_and_register(
         NULL,
         ib,
-        "False",
+        "false",
         ( IB_OP_CAPABILITY_ALLOW_NULL |
           IB_OP_CAPABILITY_NON_STREAM |
-              IB_OP_CAPABILITY_STREAM ),
+          IB_OP_CAPABILITY_STREAM ),
         NULL, NULL, /* No create function */
         NULL, NULL, /* no destroy function */
         op_false_execute, NULL);
@@ -248,11 +282,11 @@ static ib_status_t testops_init(
         return rc;
     }
 
-    /* Register the field exists operator */
+    /* Register the field exists operator. */
     rc = ib_operator_create_and_register(
         NULL,
         ib,
-        "Exists",
+        "exists",
         ( IB_OP_CAPABILITY_ALLOW_NULL |
           IB_OP_CAPABILITY_NON_STREAM |
           IB_OP_CAPABILITY_CAPTURE ),
@@ -264,59 +298,31 @@ static ib_status_t testops_init(
         return rc;
     }
 
-    /**
-     * IsType operators
+    /*
+     * Register the is_xxx operators.
      */
-
-    /* Register the IsByteStr operator */
-    rc = ib_operator_create_and_register(
-        NULL,
-        ib,
-        "IsByteStr",
-        ( IB_OP_CAPABILITY_NON_STREAM |
-          IB_OP_CAPABILITY_STREAM ),
-        NULL, NULL, /* no create function */
-        NULL, NULL, /* no destroy function */
-        op_istype_execute, &istype_params[IsTypeByteStr]
-    );
-    if (rc != IB_OK) {
-        return rc;
-    }
-
-    /* Register the IsInt operator */
-    rc = ib_operator_create_and_register(
-        NULL,
-        ib,
-        "IsInt",
-        ( IB_OP_CAPABILITY_NON_STREAM |
-          IB_OP_CAPABILITY_STREAM ),
-        NULL, NULL, /* no create function */
-        NULL, NULL, /* no destroy function */
-        op_istype_execute, &istype_params[IsTypeInt]
-    );
-    if (rc != IB_OK) {
-        return rc;
-    }
-
-    /* Register the IsFloat operator */
-    rc = ib_operator_create_and_register(
-        NULL,
-        ib,
-        "IsFloat",
-        ( IB_OP_CAPABILITY_NON_STREAM |
-          IB_OP_CAPABILITY_STREAM ),
-        NULL, NULL, /* no create function */
-        NULL, NULL, /* no destroy function */
-        op_istype_execute, &istype_params[IsTypeFloat]
-    );
-    if (rc != IB_OK) {
-        return rc;
+    for (istype_op = istype_ops;  istype_op->name != NULL; ++istype_op) {
+        rc = ib_operator_create_and_register(
+            NULL,
+            ib,
+            istype_op->name,
+            ( IB_OP_CAPABILITY_ALLOW_NULL |
+              IB_OP_CAPABILITY_NON_STREAM |
+              IB_OP_CAPABILITY_STREAM |
+              IB_OP_CAPABILITY_CAPTURE ),
+            NULL, NULL, /* no create function */
+            NULL, NULL, /* no destroy function */
+            op_istype_execute, (void *)istype_op
+            );
+        if (rc != IB_OK) {
+            return rc;
+        }
     }
 
     return IB_OK;
 }
 
-/**
+/*
  * Module structure.
  *
  * This structure defines some metadata, config data and various functions.
