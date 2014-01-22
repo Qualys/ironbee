@@ -19,8 +19,77 @@
  * @file
  * @brief IronBee --- TxDump module
  *
- * @note This module can be disabled by configuring with the "--disable-devel"
- * option.
+ * This module defines the <tt>TxDump</tt> directive, and the <tt>txDump</tt>
+ * action.
+ *
+ * @par The TxDump directive
+ *
+ * <tt>usage: TxDump @<event@> @<dest@> [@<enable@>]</tt>
+ * - @<event@> is one of:
+ *  - <tt>TxStarted</tt>
+ *  - <tt>TxProcess</tt>
+ *  - <tt>TxContext</tt>
+ *  - <tt>RequestStart</tt>
+ *  - <tt>RequestHeader</tt>
+ *  - <tt>Request</tt>
+ *  - <tt>ResponseStart</tt>
+ *  - <tt>ResponseHeader</tt>
+ *  - <tt>Response</tt>
+ *  - <tt>TxFinished</tt>
+ *  - <tt>Logging</tt>
+ *  - <tt>PostProcess</tt>
+ * - @<dest@> is of the form (stderr|stdout|ib|file://@<path@>[+])
+ *  - The '+' flag means append (file only)
+ * - @<enable@> is of the form @<flag@> [[+-]@<flag@>]>
+ *  - @<flag@> is one of:
+ *   - <tt>Basic</tt>: Dump basic TX info
+ *   - <tt>Context</tt>: Dump context info
+ *   - <tt>Connection</tt>: Dump connection info
+ *   - <tt>ReqLine</tt>: Dump request line
+ *   - <tt>ReqHdr</tt>: Dump request header
+ *   - <tt>ResLine</tt>: Dump response line
+ *   - <tt>ResHdr</tt>: Dump response header
+ *   - <tt>Flags</tt>: Dump TX flags
+ *   - <tt>Args</tt>: Dump request args
+ *   - <tt>Vars</tt>: Dump TX Vars
+ *   - <tt>Default</tt>: Default flags (Basic, ReqLine, ResLine)
+ *   - <tt>Headers</tt>: All headers (Basic, ReqLine, ReqHdr, ResLine, ResHdr)
+ *   - <tt>All</tt>: Dump all TX information
+ *
+ * @par TxDump directive Examples:
+ *
+ * - <tt>TxDump TxContext ib Basic +Context</tt>
+ * - <tt>TxDump PostProcess file:///tmp/tx.txt All</tt>
+ * - <tt>TxDump Logging file:///var/log/ib/all.txt+ All</tt>
+ * - <tt>TxDump PostProcess StdOut All</tt>
+ *
+ * @par The txDump action
+ *
+ * <tt>usage: txDump:@<dest@>,[@<enable@>]</tt>
+ * - @<dest@> is of the form (stderr|stdout|ib|file://@<path@>[+])
+ *  - The '+' flag means append (file only)
+ * - @<enable@> is of the form @<flag@>[,[+-]@<flag@>]>
+ *  - @<flag@> is one of:
+ *   - <tt>Basic</tt>: Dump basic TX info
+ *   - <tt>Context</tt>: Dump context info
+ *   - <tt>Connection</tt>: Dump connection info
+ *   - <tt>ReqLine</tt>: Dump request line
+ *   - <tt>ReqHdr</tt>: Dump request header
+ *   - <tt>ResLine</tt>: Dump response line
+ *   - <tt>ResHdr</tt>: Dump response header
+ *   - <tt>Flags</tt>: Dump TX flags
+ *   - <tt>Args</tt>: Dump request args
+ *   - <tt>Vars</tt>: Dump TX Vars
+ *   - <tt>Default</tt>: Default flags (Basic, ReqLine, ResLine)
+ *   - <tt>Headers</tt>: All headers (Basic, ReqLine, ReqHdr, ResLine, ResHdr)
+ *   - <tt>All</tt>: Dump all TX information
+ *
+ * @par txDump action Examples:
+ *
+ * - <tt>rule x \@eq 4 id:1 txDump:ib,Basic,+Context</tt>
+ * - <tt>rule y \@eq 1 id:2 txDump:file:///tmp/tx.txt,All</tt>
+ * - <tt>rule z \@eq 2 id:3 txDump:file:///var/log/ib/all.txt+,All</tt>
+ * - <tt>rule n \@eq 5 id:4 txDump:StdOut,All</tt>
  *
  * @author Nick LeRoy <nleroy@qualys.com>
  */
@@ -53,6 +122,7 @@
 #include <string.h>
 #include <strings.h>
 #include <time.h>
+#include <sys/time.h>
 
 /* Define the module name as well as a string version of it. */
 #define MODULE_NAME        txdump
@@ -80,7 +150,7 @@ static const size_t max_path_element = 64;  /**< Max size of a path element */
 #define TXDUMP_RESHDR  (1 <<  7) /**< Dump response header? */
 #define TXDUMP_FLAGS   (1 <<  8) /**< Dump TX flags? */
 #define TXDUMP_ARGS    (1 <<  9) /**< Dump request args? */
-#define TXDUMP_DATA    (1 << 10) /**< Dump TX Data? */
+#define TXDUMP_VARS    (1 << 10) /**< Dump TX vars? */
 /** Default enable flags */
 #define TXDUMP_DEFAULT                      \
     (                                       \
@@ -112,7 +182,7 @@ static const size_t max_path_element = 64;  /**< Max size of a path element */
         TXDUMP_RESHDR  |                    \
         TXDUMP_FLAGS   |                    \
         TXDUMP_ARGS    |                    \
-        TXDUMP_DATA                         \
+        TXDUMP_VARS                         \
     )
 
 /** Transaction block flags */
@@ -413,6 +483,22 @@ static void txdump_field(
         break;
     }
 
+    case IB_FTYPE_TIME :         /** Time value */
+    {
+        ib_time_t t;
+
+        rc = ib_field_value(field, ib_ftype_time_out(&t));
+        if (rc == IB_OK) {
+            ib_timeval_t tv;
+            char         buf[30];
+
+            IB_CLOCK_TIMEVAL(tv, t);
+            ib_clock_timestamp(buf, &tv);
+            txdump_v(tx, txdump, nspaces, "%s = %s", label, buf);
+        }
+        break;
+    }
+
     case IB_FTYPE_NULSTR :       /**< NUL terminated string value */
     {
         const char *s;
@@ -594,6 +680,7 @@ static ib_status_t txdump_list(
         switch (field->type) {
         case IB_FTYPE_GENERIC:
         case IB_FTYPE_NUM:
+        case IB_FTYPE_TIME:
         case IB_FTYPE_NULSTR:
         case IB_FTYPE_BYTESTR:
             fullpath = build_path(tx, path, field);
@@ -650,12 +737,12 @@ static ib_status_t txdump_context(
 
     ib_context_site_get(context, &site);
     if (site != NULL) {
-        txdump_v(tx, txdump, nspaces+2, "Site name = %s", site->name);
+        txdump_v(tx, txdump, nspaces+2, "Site Name = %s", site->name);
         txdump_v(tx, txdump, nspaces+2, "Site ID = %s", site->id);
     }
     ib_context_location_get(context, &location);
     if (location != NULL) {
-        txdump_v(tx, txdump, nspaces+2, "Location path = %s",
+        txdump_v(tx, txdump, nspaces+2, "Location Path = %s",
                  location->path);
     }
 
@@ -681,10 +768,10 @@ static void txdump_reqline(
     assert(txdump != NULL);
 
     if (line == NULL) {
-        txdump_v(tx, txdump, nspaces, "Request line unavailable");
+        txdump_v(tx, txdump, nspaces, "Request Line unavailable");
         return;
     }
-    txdump_v(tx, txdump, nspaces, "Request line:");
+    txdump_v(tx, txdump, nspaces, "Request Line:");
     txdump_bs(tx, txdump, nspaces+2, "Raw", line->raw, 256);
     txdump_bs(tx, txdump, nspaces+2, "Method", line->method, 32);
     txdump_bs(tx, txdump, nspaces+2, "URI", line->uri, 256);
@@ -710,11 +797,11 @@ static void txdump_resline(
     assert(txdump != NULL);
 
     if (line == NULL) {
-        txdump_v(tx, txdump, nspaces, "Response line unavailable");
+        txdump_v(tx, txdump, nspaces, "Response Line unavailable");
         return;
     }
 
-    txdump_v(tx, txdump, nspaces, "Response line:");
+    txdump_v(tx, txdump, nspaces, "Response Line:");
     txdump_bs(tx, txdump, nspaces+2, "Raw", line->raw, 256);
     txdump_bs(tx, txdump, nspaces+2, "Protocol", line->protocol, 32);
     txdump_bs(tx, txdump, nspaces+2, "Status", line->status, 32);
@@ -769,7 +856,7 @@ static ib_status_t txdump_tx(
         txdump_v(tx, txdump, 2, "Hostname = %s", tx->hostname);
         txdump_v(tx, txdump, 2, "Effective IP = %s", tx->remote_ipstr);
         txdump_v(tx, txdump, 2, "Path = %s", tx->path);
-        txdump_v(tx, txdump, 2, "Blocking mode = %s",
+        txdump_v(tx, txdump, 2, "Blocking Mode = %s",
                  ib_flags_any(tx->flags, IB_TX_FBLOCKING_MODE) ? "On" : "Off");
 
         if (ib_flags_any(tx->flags, TX_BLOCKED)) {
@@ -879,9 +966,9 @@ static ib_status_t txdump_tx(
     }
 
     /* All data fields */
-    if (ib_flags_all(txdump->flags, TXDUMP_DATA) ) {
+    if (ib_flags_all(txdump->flags, TXDUMP_VARS) ) {
         ib_list_t *lst;
-        txdump_v(tx, txdump, 2, "Data:");
+        txdump_v(tx, txdump, 2, "Vars:");
 
         /* Build the list */
         rc = ib_list_create(&lst, tx->mp);
@@ -1278,7 +1365,7 @@ static IB_STRVAL_MAP(flags_map) = {
     IB_STRVAL_PAIR("headers", TXDUMP_HEADERS),
     IB_STRVAL_PAIR("flags", TXDUMP_FLAGS),
     IB_STRVAL_PAIR("args", TXDUMP_ARGS),
-    IB_STRVAL_PAIR("data", TXDUMP_DATA),
+    IB_STRVAL_PAIR("vars", TXDUMP_VARS),
     IB_STRVAL_PAIR("all", TXDUMP_ALL),
     IB_STRVAL_PAIR_LAST,
 };
@@ -1292,44 +1379,6 @@ static IB_STRVAL_MAP(flags_map) = {
  * @param[in] cbdata Callback data (module)
  *
  * @returns Status code
- *
- * @par usage: TxDump @<event@> @<dest@> [@<enable@>]
- * @par @<event@> is one of:
- *  - <tt>TxStarted</tt>
- *  - <tt>TxProcess</tt>
- *  - <tt>TxContext</tt>
- *  - <tt>RequestStart</tt>
- *  - <tt>RequestHeader</tt>
- *  - <tt>Request</tt>
- *  - <tt>ResponseStart</tt>
- *  - <tt>ResponseHeader</tt>
- *  - <tt>Response</tt>
- *  - <tt>TxFinished</tt>
- *  - <tt>Logging</tt>
- *  - <tt>PostProcess</tt>
- * @par @<dest@> is of the form (stderr|stdout|ib|file://@<path@>[+])
- *  - The '+' flag means append
- * @par @<enable@> is of the form @<flag@> [[+-]@<flag@>]>
- * @par @<flag@> is one of:
- *  - <tt>Basic</tt>: Dump basic TX info
- *  - <tt>Context</tt>: Dump context info
- *  - <tt>Connection</tt>: Dump connection info
- *  - <tt>ReqLine</tt>: Dump request line
- *  - <tt>ReqHdr</tt>: Dump request header
- *  - <tt>ResLine</tt>: Dump response line
- *  - <tt>ResHdr</tt>: Dump response header
- *  - <tt>Flags</tt>: Dump TX flags
- *  - <tt>Args</tt>: Dump request args
- *  - <tt>Data</tt>: Dump TX Data
- *  - <tt>Default</tt>: Default flags (Basic, ReqLine, ResLine)
- *  - <tt>Headers</tt>: All headers (Basic, ReqLine, ReqHdr, ResLine, ResHdr)
- *  - <tt>All</tt>: Dump all TX information
- *
- * @par Examples:
- *  - <tt>TxDump TxContext ib Basic +Context</tt>
- *  - <tt>TxDump PostProcess file:///tmp/tx.txt All</tt>
- *  - <tt>TxDump Logging file:///var/log/ib/all.txt+ All</tt>
- *  - <tt>TxDump PostProcess StdOut All</tt>
  */
 static ib_status_t txdump_handler(
     ib_cfgparser_t  *cp,
@@ -1483,7 +1532,7 @@ static ib_status_t txdump_handler(
 }
 
 /**
- * Create function for the TxDump action.
+ * Create function for the txDump action.
  *
  * @param[in] ib IronBee engine (unused)
  * @param[in] parameters Constant parameters from the rule definition
@@ -1491,31 +1540,6 @@ static ib_status_t txdump_handler(
  * @param[in] cbdata Callback data (unused)
  *
  * @returns Status code
- *
- * @par usage: TxDump:@<dest@>,[@<enable@>]
- * @par @<dest@> is of the form (stderr|stdout|ib|file://@<path@>[+])
- *  - The '+' flag means append
- * @par @<enable@> is of the form @<flag@> [[+-]@<flag@>]>
- * @par @<flag@> is one of:
- *  - <tt>Basic</tt>: Dump basic TX info
- *  - <tt>Context</tt>: Dump context info
- *  - <tt>Connection</tt>: Dump connection info
- *  - <tt>ReqLine</tt>: Dump request line
- *  - <tt>ReqHdr</tt>: Dump request header
- *  - <tt>ResLine</tt>: Dump response line
- *  - <tt>ResHdr</tt>: Dump response header
- *  - <tt>Flags</tt>: Dump TX flags
- *  - <tt>Args</tt>: Dump request args
- *  - <tt>Data</tt>: Dump TX Data
- *  - <tt>Default</tt>: Default flags (Basic, ReqLine, ResLine)
- *  - <tt>Headers</tt>: All headers (Basic, ReqLine, ReqHdr, ResLine, ResHdr)
- *  - <tt>All</tt>: Dump all TX information
- *
- * @par Examples:
- *  - <tt>TxDump:ib,Basic,+Context</tt>
- *  - <tt>TxDump:file:///tmp/tx.txt,All</tt>
- *  - <tt>TxDump:file:///var/log/ib/all.txt+,All</tt>
- *  - <tt>TxDump:StdOut,All</tt>
  */
 static ib_status_t txdump_act_create(
     ib_engine_t      *ib,
@@ -1532,7 +1556,7 @@ static ib_status_t txdump_act_create(
     txdump_t          *ptxdump;
     char              *pcopy;
     char              *param;
-    static const char *label = "TxDump action";
+    static const char *label = "txDump action";
     int                flagno = 0;
     ib_flags_t         flags = 0;
     ib_flags_t         mask = 0;
@@ -1673,7 +1697,7 @@ static ib_status_t txdump_init(
 
     /* Register the TxDump action */
     rc = ib_action_register(ib,
-                            "TxDump",
+                            "txDump",
                             txdump_act_create, NULL,
                             NULL, NULL, /* no destroy function */
                             txdump_act_execute, NULL);
