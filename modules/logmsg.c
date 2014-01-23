@@ -17,12 +17,15 @@
 
 /**
  * @file
- * @brief IronBee --- LogMsg module
+ * @brief IronBee --- logMsg module
  *
- * This module defines the LogMsg action, useful for development purposes.
+ * This module defines the logMsg action, useful for development purposes.
  *
- * @note This module can be disabled by configuring with the "--disable-devel"
- * option.
+ * The logMsg action is used to log a message to the IronBee log.  It supports
+ * var expansion.
+ *
+ * Examples:
+ * - <tt>rule x \@eq 1 id:1 "logMsg:x is 1"</tt>
  *
  * @author Nick LeRoy <nleroy@qualys.com>
  */
@@ -50,10 +53,10 @@
 IB_MODULE_DECLARE();
 
 /**
- * Create function for the LogMsg action.
+ * Create function for the logMsg action.
  *
  * @param[in] ib IronBee engine (unused)
- * @param[in] parameters LogMsg parameters
+ * @param[in] parameters logMsg parameters
  * @param[in] inst Action instance
  * @param[in] cbdata Callback data (unused)
  *
@@ -91,11 +94,11 @@ static ib_status_t logmsg_create(
 }
 
 /**
- * Execute function for the "LogMsg" action
+ * Execute function for the "logMsg" action
  *
  * @param[in] rule_exec The rule execution object
  * @param[in] data Instance data (var expansion)
- * @param[in] cbdata Callback data (module object)
+ * @param[in] cbdata Callback data (@ref ib_module_t)
  *
  * @returns Status code
  */
@@ -108,7 +111,8 @@ static ib_status_t logmsg_execute(
     assert(data != NULL);
     assert(cbdata != NULL);
 
-    const ib_var_expand_t *expand = (const ib_var_expand_t *)data;
+    const ib_var_expand_t *expand = data;
+    ib_module_t           *module = cbdata;
     const char            *expanded = NULL;
     size_t                 expanded_length;
     ib_status_t            rc;
@@ -122,14 +126,14 @@ static ib_status_t logmsg_execute(
     );
     if (rc != IB_OK) {
         ib_rule_log_error(rule_exec,
-                          "log_execute: Failed to expand string: %s",
-                          ib_status_to_string(rc));
+                          "%s: Failed to expand string: %s",
+                          module->name, ib_status_to_string(rc));
         return rc;
     }
 
     /* Log the message */
-    ib_rule_log_debug(rule_exec,
-                      "LOG: %.*s",
+    ib_rule_log_debug(rule_exec, "%s: %.*s",
+                      module->name,
                       (int)expanded_length, expanded);
 
     return IB_OK;
@@ -153,16 +157,12 @@ static ib_status_t logmsg_init(
 
     ib_log_debug(ib, "Initializing development/logmsg module");
 
-    /**
-     * Debug logging
-     */
-
-    /* Register the LogMsg action */
+    /* Register the logMsg action */
     rc = ib_action_register(ib,
-                            "LogMsg",
+                            "logMsg",
                             logmsg_create, NULL,
                             NULL, NULL, /* no destroy function */
-                            logmsg_execute, module);
+                            logmsg_execute, NULL);
     if (rc != IB_OK) {
         return rc;
     }
