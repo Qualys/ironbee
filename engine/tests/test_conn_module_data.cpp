@@ -122,7 +122,7 @@ private:
     }
 };
 
-TEST_F(ConnDataTest, set_get_NULL) {
+TEST_F(ConnDataTest, DISABLED_set_get_NULL) {
     ib_status_t rc;
     mod_data_t  mod_data = {
         .set_ptr = NULL,
