@@ -116,7 +116,7 @@ private:
     }
 };
 
-TEST_F(TxDataTest, set_get_NULL) {
+TEST_F(TxDataTest, DISABLED_set_get_NULL) {
     ib_status_t rc;
     mod_data_t  mod_data = {
         .set_ptr = NULL,
@@ -173,7 +173,7 @@ TEST_F(TxDataTest, set_get) {
     ASSERT_EQ(mod_data.set_ptr, mod_data.get_ptr);
 }
 
-TEST_F(TxDataTest, noset_get) {
+TEST_F(TxDataTest, DISABLED_noset_get) {
     ib_status_t rc;
     char        data[20];
     mod_data_t  mod_data = {
