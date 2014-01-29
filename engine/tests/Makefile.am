@@ -12,12 +12,14 @@ endif
 check_PROGRAMS = \
 	test_action \
 	test_config \
+	test_conn_module_data \
 	test_engine \
 	test_engine_manager \
 	test_kvstore \
 	test_operator \
 	test_rule_inject \
-  test_rule_hooks
+	test_tx_module_data \
+	test_rule_hooks
 
 if CPP
 check_PROGRAMS += \
@@ -74,6 +76,10 @@ test_rule_hooks_SOURCES = test_rule_hooks.cpp
 
 test_config_SOURCES = test_config.cpp \
                       mock_module.c
+
+test_conn_module_data_SOURCES = test_conn_module_data.cpp
+
+test_tx_module_data_SOURCES = test_tx_module_data.cpp
 
 test_operator_SOURCES = test_operator.cpp
 
