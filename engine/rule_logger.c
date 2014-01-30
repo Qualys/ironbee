@@ -201,7 +201,7 @@ static ib_status_t ib_field_format_quote(
             if (rc != IB_OK) {
                 break;
             }
-            snprintf(buf, bufsize, "%Lf", f);
+            snprintf(buf, bufsize, "%Lg", f);
             break;
         }
 
@@ -347,7 +347,7 @@ static ib_status_t ib_field_format_escape(
             if (rc != IB_OK) {
                 break;
             }
-            snprintf(buf, bufsize, "%Lf", f);
+            snprintf(buf, bufsize, "%Lg", f);
             break;
         }
 
