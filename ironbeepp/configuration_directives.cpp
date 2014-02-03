@@ -91,7 +91,6 @@ ib_status_t config_param2(
     void*           cbdata
 )
 {
-    try {
         data_to_value<
             ConfigurationDirectivesRegistrar::param2_t
         >(cbdata)(
@@ -100,10 +99,6 @@ ib_status_t config_param2(
             param1,
             param2
         );
-    }
-    catch (...) {
-        return convert_exception(cfgparser->ib);
-    }
     return IB_OK;
 }
 
