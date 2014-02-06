@@ -262,13 +262,13 @@ static void txdump_va(
         nspaces = 32;
     }
 
-    /* Initialize the space buffer */
-    for (size_t n = 0;  n < nspaces;  ++n) {
-        fmtbuf[n] = ' ';
+    /* Initialize the format buffer */
+    if (nspaces) {
+        memset(fmtbuf, ' ', nspaces);
     }
-    fmtbuf[nspaces] = '\0';
-    strcat(fmtbuf, fmt);
+    strncpy(fmtbuf+nspaces, fmt, max_fmt-nspaces);
 
+    /* Write the line using the new format string */
     if (txdump->fp != NULL) {
         vfprintf(txdump->fp, fmtbuf, ap);
         fputs("\n", txdump->fp);
