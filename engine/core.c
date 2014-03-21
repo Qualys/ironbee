@@ -4955,6 +4955,35 @@ ib_status_t ib_core_auditlog_parts_map(
     return IB_OK;
 }
 
+ib_status_t ib_core_loglevel_lookup(
+    const char        *str,
+    ib_logger_level_t *plevel
+)
+{
+    assert(str != NULL);
+    assert(plevel != NULL);
+    ib_status_t rc;
+    uint64_t level;
+    ib_num_t num;
+
+    /* Look it up as an integer */
+    rc = ib_string_to_num(str, 0, &num);
+    if (rc == IB_OK) {
+        *plevel = (ib_logger_level_t)num;
+        return IB_OK;
+    }
+
+    /* Lookup the string */
+    rc = ib_strval_lookup(core_loglevels_map, str, &level);
+    if (rc == IB_OK) {
+        *plevel = (ib_logger_level_t)level;
+        return IB_OK;
+    }
+
+    /* Failed */
+    return rc;
+}
+
 ib_status_t DLL_PUBLIC ib_core_limits_get(
     ib_context_t *ctx,
     const ib_tx_limits_t **limits

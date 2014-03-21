@@ -284,6 +284,19 @@ ib_status_t DLL_PUBLIC ib_core_dispatch_auditlog(
 );
 
 /**
+ * Convert a string to a log level
+ *
+ * @param[in] str String to convert
+ * @param[out] plevel Pointer to the log level
+ *
+ * @returns Status code (IB_OK)
+ */
+ib_status_t ib_core_loglevel_lookup(
+    const char        *str,
+    ib_logger_level_t *plevel
+);
+
+/**
  * @} IronBeeCore
  */
 
