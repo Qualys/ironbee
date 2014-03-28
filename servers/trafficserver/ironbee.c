@@ -2563,7 +2563,7 @@ static ib_status_t logger_format(
             ib_logger,
             rec,
             log_msg,
-            log_msg_sz,
+            ((log_msg_sz > 255) ? 255 : log_msg_sz), /* TODO NRL Hack */
             &std_msg,
             NULL);
         if (rc != IB_OK) {
