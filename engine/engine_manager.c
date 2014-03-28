@@ -25,6 +25,7 @@
 #include "ironbee_config_auto.h"
 
 #include <ironbee/engine_manager.h>
+#include "engine_manager_private.h"
 
 #include <ironbee/config.h>
 #include <ironbee/context.h>
@@ -725,7 +726,9 @@ ib_status_t ib_manager_engine_release(
     }
 
     /* Happy path: The current engine is being released. */
-    if ( engine == manager->engine_current->engine) {
+    if ( (manager->engine_current != NULL) &&
+         (engine == manager->engine_current->engine) )
+    {
         managed_engine = manager->engine_current;
     }
 
@@ -860,4 +863,54 @@ ib_status_t ib_manager_engine_preconfig_fn_add(
     }
 
     return IB_OK;
+}
+
+/*
+ * The functions below are provided only for the "private API"
+ */
+ib_mpool_t *ib_manager_pool(
+    const ib_manager_t *manager
+)
+{
+    assert(manager != NULL);
+    return manager->mpool;
+}
+
+ib_status_t ib_manager_disable_engine(
+    ib_manager_t *manager
+)
+{
+    assert(manager != NULL);
+
+    ib_status_t rc;
+
+    /* Grab the engine list lock */
+    rc = ib_lock_lock(&manager->manager_lck);
+    if (rc != IB_OK) {
+        return rc;
+    }
+
+    /* Only do anything if there's a current engine */
+    if (manager->engine_current != NULL) {
+        assert(manager->engine_current->ref_count > 0);
+        --(manager->engine_current->ref_count);
+        manager->engine_current = NULL;
+    }
+
+    /* Release the lock. */
+    ib_lock_unlock(&manager->manager_lck);
+
+    return rc;
+}
+
+ib_engine_t *ib_manager_current_engine(
+    const ib_manager_t *manager
+)
+{
+    if (manager->engine_current == NULL) {
+        return NULL;
+    }
+    else {
+        return manager->engine_current->engine;
+    }
 }
