@@ -103,20 +103,20 @@ typedef struct {
 
     const char      *txlogfile;
     TSTextLogObject  txlogger;
-} module_data_t;
+} ibts_module_data_t;
 
 /* Global module data */
-static module_data_t module_data =
+static ibts_module_data_t module_data =
 {
-    NULL,                            /* .logger */
-    NULL,                            /* .manager */
-    IB_MANAGER_DEFAULT_MAX_ENGINES,  /* .max_engines */
-    NULL,                            /* .config_file */
-    NULL,                            /* .log_file */
-    IB_LOG_WARNING,                  /* .log_level */
-    false,                           /* .log_disable */
-    DEFAULT_TXLOG,
-    NULL
+    .logger = NULL,
+    .manager = NULL,
+    .max_engines = IB_MANAGER_DEFAULT_MAX_ENGINES,
+    .config_file = NULL,
+    .log_file = NULL,
+    .log_level = IB_LOG_WARNING,
+    .log_disable = false,
+    .txlogfile = DEFAULT_TXLOG,
+    .txlogger = NULL,
 };
 
 typedef enum {
@@ -2546,8 +2546,8 @@ static ib_status_t logger_format(
         return IB_DECLINED;
     }
 
-    module_data_t   *mod_data = (module_data_t *)cbdata;
-    TSTextLogObject  logger = mod_data->logger;
+    ibts_module_data_t *mod_data = (ibts_module_data_t *)cbdata;
+    TSTextLogObject       logger = mod_data->logger;
 
     if (logger == NULL) {
         return IB_DECLINED;
@@ -2598,8 +2598,8 @@ static ib_status_t logger_close(
     if (cbdata == NULL) {
         return IB_OK;
     }
-    module_data_t   *mod_data = (module_data_t *)cbdata;
-    TSTextLogObject  logger = mod_data->logger;
+    ibts_module_data_t *mod_data = (ibts_module_data_t *)cbdata;
+    TSTextLogObject       logger = mod_data->logger;
 
     if (logger != NULL) {
         TSTextLogObjectFlush(logger);
@@ -2614,7 +2614,7 @@ static ib_status_t logger_close(
  * @param[in] element A @ref ib_logger_standard_msg_t holding
  *            a serialized transaction log to be written to the
  *            Traffic Server transaction log.
- * @param[in] cbdata A @ref module_data_t.
+ * @param[in] cbdata A @ref ibts_module_data_t.
  */
 static void txlog_record_element(
     void *element,
@@ -2625,7 +2625,7 @@ static void txlog_record_element(
     assert(cbdata != NULL);
 
     ib_logger_standard_msg_t *msg      = (ib_logger_standard_msg_t *)element;
-    module_data_t            *mod_data = (module_data_t *)cbdata;
+    ibts_module_data_t            *mod_data = (ibts_module_data_t *)cbdata;
 
     /* FIXME - expand msg->msg with Traffic Server variables. */
     /* I don't understand what is TBD here! */
@@ -2656,7 +2656,7 @@ static void txlog_record_element(
  *
  * @param[in] logger The logger.
  * @param[in] writer The log writer.
- * @param[in] cbdata Callback data. @ref module_data_t.
+ * @param[in] cbdata Callback data. @ref ibts_module_data_t.
  *
  * @returns
  * - IB_OK On success.
@@ -2668,7 +2668,7 @@ static ib_status_t txlog_record(
     void               *cbdata
 )
 {
-    module_data_t *mod_data = (module_data_t *)cbdata;
+    ibts_module_data_t *mod_data = (ibts_module_data_t *)cbdata;
     assert(logger != NULL);
     assert(writer != NULL);
     assert(cbdata != NULL);
@@ -2693,7 +2693,7 @@ static ib_status_t txlog_record(
  *
  * @param[out] manager The manager.
  * @param[in] ib The unconfigured engine.
- * @param[in] cbdata @ref module_data_t.
+ * @param[in] cbdata @ref ibts_module_data_t.
  *
  * @returns
  * - IB_OK On success.
@@ -2709,9 +2709,9 @@ static ib_status_t engine_preconfig_fn(
     assert(ib != NULL);
     assert(cbdata != NULL);
 
-    ib_status_t         rc;
-    ib_logger_format_t *iblog_format;
-    module_data_t      *mod_data = (module_data_t *)cbdata;
+    ib_status_t           rc;
+    ib_logger_format_t   *iblog_format;
+    ibts_module_data_t *mod_data = (ibts_module_data_t *)cbdata;
 
     /* Clear all existing loggers. */
     rc = ib_logger_writer_clear(ib_engine_logger_get(ib));
@@ -2752,7 +2752,7 @@ static ib_status_t engine_preconfig_fn(
  *
  * @param[out] manager The manager.
  * @param[in] ib The configured engine.
- * @param[in] cbdata @ref module_data_t.
+ * @param[in] cbdata @ref ibts_module_data_t.
  *
  * @returns
  * - IB_OK On success.
@@ -2770,7 +2770,7 @@ static ib_status_t engine_postconfig_fn(
 
     int rv;
     ib_status_t         rc;
-    module_data_t      *mod_data = (module_data_t *)cbdata;
+    ibts_module_data_t      *mod_data = (ibts_module_data_t *)cbdata;
     ib_logger_format_t *txlog_format;
 
     rc = ib_logger_fetch_format(
@@ -2849,7 +2849,7 @@ static void addr2str(const struct sockaddr *addr, char *str, int *port)
  */
 static void ibexit(void)
 {
-    module_data_t *mod_data = &module_data;
+    ibts_module_data_t *mod_data = &module_data;
 
     TSDebug("ironbee", "ibexit()");
     if (mod_data->logger != NULL) {
@@ -2887,7 +2887,7 @@ static void ibexit(void)
  * @return  Success/Failure parsing the config line
  */
 static ib_status_t read_ibconf(
-    module_data_t *mod_data,
+    ibts_module_data_t *mod_data,
     int            argc,
     const char    *argv[]
 )
@@ -2954,7 +2954,7 @@ static ib_status_t read_ibconf(
  *
  * @returns status
  */
-static int ironbee_init(module_data_t *mod_data)
+static int ironbee_init(ibts_module_data_t *mod_data)
 {
     /* grab from httpd module's post-config */
     ib_status_t rc;
