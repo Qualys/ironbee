@@ -8,6 +8,7 @@ EXTRA_DIST = \
     config_private.h             \
     core_private.h               \
     core_audit_private.h         \
+    engine_manager_private_api.h \
     engine_private.h             \
     module_private.h             \
     rule_engine_private.h        \
@@ -19,6 +20,7 @@ lib_LTLIBRARIES = libironbee.la
 libironbee_la_SOURCES =                  \
     action.c                             \
     capture.c                            \
+    controller.c                         \
     config.c                             \
     config-parser.c                      \
     config-parser.h                      \
