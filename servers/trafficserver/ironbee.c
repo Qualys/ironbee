@@ -67,6 +67,7 @@
 # define __STDC_FORMAT_MACROS 1
 # include <inttypes.h>
 
+#include <ironbee/ctrl_srv.h>
 #include <ironbee/engine.h>
 #include <ironbee/engine_manager.h>
 #include <ironbee/config.h>
@@ -2827,6 +2828,24 @@ static void addr2str(const struct sockaddr *addr, char *str, int *port)
 #define TRACEFILE NULL
 
 /**
+ * Handle flush from the manager API or ibexit()
+ *
+ * @param[in] cbdata Callback data (module data)
+ */
+static void flush_logs(void *cbdata)
+{
+    assert(cbdata != NULL);
+    ibts_module_data_t *mod_data = cbdata;
+
+    if (mod_data->logger != NULL) {
+        TSTextLogObjectFlush(mod_data->logger);
+    }
+    if (mod_data->txlogger != NULL) {
+        TSTextLogObjectFlush(mod_data->txlogger);
+    }
+}
+
+/**
  * Destroy the engine manager from the command socket or ibexit()
  *
  * @param[in] cbdata Callback data (module data)
@@ -2951,6 +2970,22 @@ static ib_status_t read_ibconf(
         return IB_EINVAL;
     }
 }
+
+/*
+ * Data passed to the command sock plugin
+ */
+const DLL_PUBLIC ibts_shared_data_t IBTS_SHARED_DATA = {
+    .module_data = &module_data,
+    .hooks = {
+        .flush_fn      = flush_logs,
+        .flush_data    = &module_data,
+        .destroy_fn    = destroy_manager,
+        .destroy_data  = &module_data,
+        .kill_fn       = NULL,            /* Provided by controller plugin */
+        .kill_data     = NULL,
+    }
+};
+
 /**
  * Initialize IronBee for ATS.
  *
