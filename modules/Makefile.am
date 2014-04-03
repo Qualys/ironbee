@@ -187,6 +187,13 @@ ibmod_txvars_la_CFLAGS    = ${AM_CFLAGS}
 ibmod_txvars_la_LDFLAGS   = $(AM_LDFLAGS)
 # End of formerly "development" modules
 
+# Command socket module
+module_LTLIBRARIES            += ibmod_command_sock.la
+ibmod_command_sock_la_SOURCES  = command_sock.c
+ibmod_command_sock_la_CFLAGS   = ${AM_CFLAGS}
+ibmod_command_sock_la_LDFLAGS  = $(AM_LDFLAGS)
+# End of command socket module
+
 ibmod_user_agent_la_SOURCES = user_agent.c \
                               user_agent_rules.c \
                               user_agent_private.h
