@@ -23,6 +23,7 @@
  */
 
 #include "ironbee_config_auto.h"
+#include "ts_private.h"
 
 #include <ironbee/flags.h>
 
@@ -89,25 +90,10 @@ static void addr2str(const struct sockaddr *addr, char *str, int *port);
 
 typedef enum {LE_N, LE_RN, LE_ANY} http_lineend_t;
 
-/**
- * Plugin global data
- */
-typedef struct {
-    TSTextLogObject  logger;         /**< TrafficServer log object */
-    ib_manager_t    *manager;        /**< IronBee engine manager object */
-    size_t           max_engines;    /**< Max # of simultaneous engines */
-    const char      *config_file;    /**< IronBee configuration file */
-    const char      *log_file;       /**< IronBee log file */
-    int              log_level;      /**< IronBee log level */
-    bool             log_disable;    /**< Disable logging? */
-
-    const char      *txlogfile;
-    TSTextLogObject  txlogger;
-} ibts_module_data_t;
-
 /* Global module data */
 static ibts_module_data_t module_data =
 {
+    .ib_initialized = false,
     .logger = NULL,
     .manager = NULL,
     .max_engines = IB_MANAGER_DEFAULT_MAX_ENGINES,
@@ -2841,22 +2827,23 @@ static void addr2str(const struct sockaddr *addr, char *str, int *port)
 #define TRACEFILE NULL
 
 /**
- * Handle ATS shutdown for IronBee plugin.
+ * Destroy the engine manager from the command socket or ibexit()
  *
- * Registered via atexit() during initialization, destroys the IB engine,
- * etc.
- *
+ * @param[in] cbdata Callback data (module data)
  */
-static void ibexit(void)
+static void destroy_manager(void *cbdata)
 {
-    ibts_module_data_t *mod_data = &module_data;
+    assert(cbdata != NULL);
+    ibts_module_data_t *mod_data = cbdata;
 
-    TSDebug("ironbee", "ibexit()");
+    TSDebug("ironbee", "destroy_manager(): l=%p m=%p tl=%p\n",
+            mod_data->logger, mod_data->manager, mod_data->txlogger);
     if (mod_data->logger != NULL) {
         TSTextLogObjectFlush(mod_data->logger);
     }
     if (mod_data->manager != NULL) {
         ib_manager_destroy(mod_data->manager);
+        mod_data->manager = NULL;
     }
     if (mod_data->logger != NULL) {
         TSTextLogObjectFlush(mod_data->logger);
@@ -2866,12 +2853,30 @@ static void ibexit(void)
     if (mod_data->txlogger != NULL) {
         TSTextLogObjectFlush(mod_data->txlogger);
         TSTextLogObjectDestroy(mod_data->txlogger);
+        mod_data->txlogger = NULL;
     }
     if (mod_data->log_file != NULL) {
         free((void *)mod_data->log_file);
         mod_data->log_file = NULL;
     }
-    ib_shutdown();
+
+    if (mod_data->ib_initialized) {
+        ib_shutdown();
+        mod_data->ib_initialized = false;
+    }
+}
+
+/**
+ * Handle ATS shutdown for IronBee plugin.
+ *
+ * Registered via atexit() during initialization, destroys the IB engine,
+ * etc.
+ *
+ */
+static void ibexit(void)
+{
+    TSDebug("ironbee", "ibexit()");
+    destroy_manager(&module_data);
     TSDebug("ironbee", "ibexit() done");
 }
 
@@ -2898,6 +2903,7 @@ static ib_status_t read_ibconf(
     mod_data->log_level = 4;
 
     /* const-ness mismatch looks like an oversight, so casting should be fine */
+    optind = 1;    /* Reset */
     while (c = getopt(argc, (char**)argv, "l:Lv:d:m:x:"), c != -1) {
         switch(c) {
         case 'L':
@@ -2961,6 +2967,7 @@ static int ironbee_init(ibts_module_data_t *mod_data)
     int rv;
 
     if (!mod_data->log_disable) {
+        assert(mod_data->logger == NULL);
         /* success is documented as TS_LOG_ERROR_NO_ERROR but that's undefined.
          * It's actually a TS_SUCCESS (proxy/InkAPI.cc line 6641).
          */
@@ -2978,9 +2985,11 @@ static int ironbee_init(ibts_module_data_t *mod_data)
     if (rc != IB_OK) {
         return rc;
     }
+    mod_data->ib_initialized = true;
 
     /* Create the IronBee engine manager */
     TSDebug("ironbee", "Creating IronBee engine manager");
+    assert(mod_data->manager == NULL);
     rc = ib_manager_create(&(mod_data->manager),   /* Engine Manager */
                            &ibplugin,              /* Server object */
                            mod_data->max_engines); /* Default max */
