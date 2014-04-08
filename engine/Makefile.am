@@ -32,6 +32,7 @@ libironbee_la_SOURCES =                  \
     core_vars.c                          \
     engine.c                             \
     engine_manager.c                     \
+    engine_manager_control_channel.c     \
     filter.c                             \
     log.c                                \
     logger.c                             \
