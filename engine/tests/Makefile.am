@@ -3,7 +3,7 @@ include $(top_srcdir)/build/tests.mk
 LDADD = \
 	$(top_builddir)/util/libibutil.la \
 	$(top_builddir)/engine/libironbee.la \
-    $(top_builddir)/libs/libhtp/htp/libhtp.la
+	$(top_builddir)/libs/libhtp/htp/libhtp.la
 
 if CPP
 LDADD += $(top_builddir)/ironbeepp/libibpp.la
