@@ -185,7 +185,7 @@ TEST_F(EngMgrCtrlChanTest, send_echo) {
     ASSERT_EQ(IB_OK, fut.get());
 
     ASSERT_STREQ(
-        "echo hi, how are you?",
+        "hi, how are you?",
         response
     );
 

@@ -15,12 +15,11 @@
  * limitations under the License.
  ****************************************************************************/
 
-
 /**
  * @file
  * @brief IronBee --- Engine Manager Control Channel
  *
- * @author Sam Baskinger<sbaskinger@qualys.com>
+ * @author Sam Baskinger <sbaskinger@qualys.com>
  */
 
 #ifndef __ENGINE_MANAGER_CONTROL_CHANNEL_H_
@@ -184,8 +183,7 @@ ib_status_t DLL_PUBLIC ib_engine_manager_control_cmd_register(
  * Register the @c echo command with this channel.
  *
  * This is a useful command used for debugging or pings.
- * It will echo the command name, followed by a single space, followed by
- * the arguments submitted to it.
+ * It will echo the the arguments submitted to it.
  *
  * @param[in] channel The channel to register this command with.
  *
@@ -194,6 +192,26 @@ ib_status_t DLL_PUBLIC ib_engine_manager_control_cmd_register(
  * - Other on registration failure.
  */
 ib_status_t DLL_PUBLIC ib_engine_manager_control_echo_register(
+    ib_engine_manager_control_channel_t *channel
+);
+
+/**
+ * Register the default manager control commands.
+ *
+ * The commands registered are:
+ * - enable - enable IronBee in the manager.
+ * - disable - disable IronBee in the manager.
+ * - cleanup - cleanup old IronBee engines in the manager.
+ * - engine_create <config file> - Create a new engine.
+ *   IronBee must not be disabled for this to succeed.
+ *
+ * @param[in] channel The channel to register this command with.
+ *
+ * @returns
+ * - IB_OK On success.
+ * - Other on registration failure.
+ */
+ib_status_t DLL_PUBLIC ib_engine_manager_control_manager_ctrl_register(
     ib_engine_manager_control_channel_t *channel
 );
 

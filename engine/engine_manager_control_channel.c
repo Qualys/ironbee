@@ -1,3 +1,26 @@
+/*****************************************************************************
+ * Licensed to Qualys, Inc. (QUALYS) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * QUALYS licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ****************************************************************************/
+
+/**
+ * @file
+ * @brief IronBee --- Engine Manager Control Channel
+ *
+ * @author Sam Baskinger <sbaskinger@qualys.com>
+ */
 
 #include <ironbee/engine_manager_control_channel.h>
 #include <ironbee/engine_manager.h>
@@ -60,6 +83,9 @@ static void channel_cleanup(void *cbdata) {
     ib_engine_manager_control_channel_stop(manager_controller);
 }
 
+/**
+ * Echo command.
+ */
 static ib_status_t echo_cmd(
     ib_mm_t      mm,
     const char  *name,
@@ -68,19 +94,81 @@ static ib_status_t echo_cmd(
     void        *cbdata
 )
 {
-    size_t len = strlen(name) + strlen(args) + 2;
-    char   *r;
-
-    r = ib_mm_alloc(mm, len);
-    if (r == NULL) {
-        return IB_EALLOC;
-    }
-
-    snprintf(r, len, "%s %s", name, args);
-
-    *result = r;
+    *result = args;
 
     return IB_OK;
+}
+
+/**
+ * Disable manager command.
+ */
+static ib_status_t manager_cmd_disable(
+    ib_mm_t      mm,
+    const char  *name,
+    const char  *args,
+    const char **result,
+    void        *cbdata
+)
+{
+    assert(cbdata != NULL);
+
+    ib_manager_t *manager = (ib_manager_t *)cbdata;
+
+    return ib_manager_disable(manager);
+}
+
+/**
+ * Enable manager command.
+ */
+static ib_status_t manager_cmd_enable(
+    ib_mm_t      mm,
+    const char  *name,
+    const char  *args,
+    const char **result,
+    void        *cbdata
+)
+{
+    assert(cbdata != NULL);
+
+    ib_manager_t *manager = (ib_manager_t *)cbdata;
+
+    return ib_manager_enable(manager);
+}
+
+/**
+ * Create engine manager command.
+ */
+static ib_status_t manager_cmd_engine_create(
+    ib_mm_t      mm,
+    const char  *name,
+    const char  *args,
+    const char **result,
+    void        *cbdata
+)
+{
+    assert(cbdata != NULL);
+
+    ib_manager_t *manager = (ib_manager_t *)cbdata;
+
+    return ib_manager_engine_create(manager, args);
+}
+
+/**
+ * Clean manager command.
+ */
+static ib_status_t manager_cmd_cleanup(
+    ib_mm_t      mm,
+    const char  *name,
+    const char  *args,
+    const char **result,
+    void        *cbdata
+)
+{
+    assert(cbdata != NULL);
+
+    ib_manager_t *manager = (ib_manager_t *)cbdata;
+
+    return ib_manager_engine_cleanup(manager);
 }
 
 /**
@@ -441,14 +529,13 @@ ib_status_t ib_engine_manager_control_recv(
     ssize_t            recvsz = 0;
     struct sockaddr_un src_addr;
     socklen_t          addrlen = sizeof(src_addr);
-    recvsz =
-        recvfrom(
-            channel->sock,
-            &(channel->msg),
-            IB_ENGINE_MANAGER_CONTROL_CHANNEL_MAX_MSG_SZ,
-            0,
-            (struct sockaddr *)&src_addr,
-            &addrlen);
+    recvsz = recvfrom(
+        channel->sock,
+        channel->msg,
+        IB_ENGINE_MANAGER_CONTROL_CHANNEL_MAX_MSG_SZ,
+        0,
+        (struct sockaddr *)&src_addr,
+        &addrlen);
     if (recvsz == -1) {
         /* On recv error the message in the channel buffer is not valid.
          * Set the length to 0. */
@@ -625,6 +712,44 @@ ib_status_t ib_engine_manager_control_echo_register(
         channel,
         "echo",
         echo_cmd, NULL);
+}
+
+
+ib_status_t ib_engine_manager_control_manager_ctrl_register(
+    ib_engine_manager_control_channel_t *channel
+)
+{
+    assert(channel != NULL);
+    assert(channel->manager != NULL);
+
+    ib_status_t rc;
+
+    /* Local map of commands to register. All commands here
+     * take an engine manager as their callback data. */
+    struct {
+        const char                                 *name;
+        ib_engine_manager_control_channel_cmd_fn_t  fn;
+    } cmds[] = {
+        { "enable",        manager_cmd_enable },
+        { "disable",       manager_cmd_disable },
+        { "cleanup",       manager_cmd_cleanup },
+        { "engine_create", manager_cmd_engine_create },
+        { NULL,            NULL }
+    };
+
+    for (int i = 0; cmds[i].name != NULL; ++i) {
+        rc = ib_engine_manager_control_cmd_register(
+            channel,
+            cmds[i].name,
+            cmds[i].fn,
+            channel->manager
+        );
+        if (rc != IB_OK) {
+            return rc;
+        }
+    }
+
+    return IB_OK;
 }
 
 const char *ib_engine_manager_control_channel_socket_path_get(
