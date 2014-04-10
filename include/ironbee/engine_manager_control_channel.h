@@ -25,10 +25,6 @@
 #ifndef __ENGINE_MANAGER_CONTROL_CHANNEL_H_
 #define __ENGINE_MANAGER_CONTROL_CHANNEL_H_
 
-/* This gets the PRI*64 types */
-#define __STDC_FORMAT_MACROS 1
-#include <inttypes.h>
-
 #include <ironbee/engine.h>
 #include <ironbee/engine_manager.h>
 #include <ironbee/mm.h>
@@ -61,6 +57,9 @@ extern "C" {
  * @{
  */
 
+/**
+ * Dispatch commands from other processes to an @ref ib_manager_t.
+ */
 typedef struct ib_engine_manager_control_channel_t ib_engine_manager_control_channel_t;
 
 /**

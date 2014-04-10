@@ -18,9 +18,9 @@
 
 //////////////////////////////////////////////////////////////////////////////
 /// @file
-/// @brief IronBee --- Engine Test Functions
+/// @brief IronBee --- Engine Manager Channel Test Functions
 ///
-/// @author Brian Rectanus <brectanus@qualys.com>
+/// @author Sam Baskinger <sbaskinger@qualys.com>
 //////////////////////////////////////////////////////////////////////////////
 
 #include "gtest/gtest.h"
@@ -32,52 +32,60 @@
 #include <boost/filesystem.hpp>
 #include <boost/thread.hpp>
 
-class EngMgrCtrlChanTest : public BaseFixture {
-
-protected:
-    ib_manager_t *ib_manager;
-
+class EngMgrCtrlChanTest : public BaseFixture
+{
 public:
-    void SetUp() {
+    void SetUp()
+    {
         BaseFixture::SetUp();
         ASSERT_EQ(
             IB_OK,
             ib_manager_create(
-                &ib_manager,
+                &m_ib_manager,
                 &ibt_ibserver,
                 10
             )
         );
     }
 
-    virtual void TearDown() {
-        ib_manager_destroy(ib_manager);
+    virtual void TearDown()
+    {
+        ib_manager_destroy(m_ib_manager);
         BaseFixture::TearDown();
     }
+
+    ib_manager_t* EngineManager() const
+    {
+        return m_ib_manager;
+    }
+
+private:
+    ib_manager_t* m_ib_manager;
 };
 
 TEST_F(EngMgrCtrlChanTest, init) {
-    ib_engine_manager_control_channel_t *channel;
+    ib_engine_manager_control_channel_t* channel;
 
     ASSERT_EQ(
         IB_OK,
         ib_engine_manager_control_channel_create(
             &channel,
             MainMM(),
-            ib_manager
+            EngineManager()
         )
     );
 }
 
-TEST_F(EngMgrCtrlChanTest, socket_path) {
-    ib_engine_manager_control_channel_t *channel;
+TEST_F(EngMgrCtrlChanTest, socket_path)
+{
+    ib_engine_manager_control_channel_t* channel;
 
     ASSERT_EQ(
         IB_OK,
         ib_engine_manager_control_channel_create(
             &channel,
             MainMM(),
-            ib_manager
+            EngineManager()
         )
     );
 
@@ -98,15 +106,16 @@ TEST_F(EngMgrCtrlChanTest, socket_path) {
     );
 }
 
-TEST_F(EngMgrCtrlChanTest, start_stop) {
-    ib_engine_manager_control_channel_t *channel;
+TEST_F(EngMgrCtrlChanTest, start_stop)
+{
+    ib_engine_manager_control_channel_t* channel;
 
     ASSERT_EQ(
         IB_OK,
         ib_engine_manager_control_channel_create(
             &channel,
             MainMM(),
-            ib_manager
+            EngineManager()
         )
     );
 
@@ -131,16 +140,17 @@ TEST_F(EngMgrCtrlChanTest, start_stop) {
     ASSERT_FALSE(boost::filesystem::exists("./tmp.sock"));
 }
 
-TEST_F(EngMgrCtrlChanTest, send_echo) {
-    ib_engine_manager_control_channel_t *channel;
-    const char *response;
+TEST_F(EngMgrCtrlChanTest, send_echo)
+{
+    ib_engine_manager_control_channel_t* channel;
+    const char* response;
 
     ASSERT_EQ(
         IB_OK,
         ib_engine_manager_control_channel_create(
             &channel,
             MainMM(),
-            ib_manager
+            EngineManager()
         )
     );
 

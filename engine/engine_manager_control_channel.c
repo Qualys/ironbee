@@ -30,26 +30,27 @@
 #include <ironbee/mm.h>
 #include <ironbee/mm_mpool_lite.h>
 
+#include <assert.h>
+#include <errno.h>
+#include <string.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <string.h>
-#include <assert.h>
-#include <errno.h>
 #include <unistd.h>
+
+//! Basename of the socket file.
+#define DEFAULT_SOCKET_BASENAME "ironbee_manager_controller.sock"
 
 #ifdef ENGINE_MANAGER_CONTROL_SOCK_PATH
 //! The directory that the @ref DEFAULT_SOCKET_BASENAME will be created in.
 static const char *DEFAULT_SOCKET_PATH =
-    IB_XSTRINGIFY(ENGINE_MANAGER_CONTROL_SOCK_PATH);
+    IB_XSTRINGIFY(ENGINE_MANAGER_CONTROL_SOCK_PATH) "/" DEFAULT_SOCKET_BASENAME;
 #else
 //! The directory that the @ref DEFAULT_SOCKET_BASENAME will be created in.
-static const char *DEFAULT_SOCKET_PATH = "/var/run/";
+static const char *DEFAULT_SOCKET_PATH = "/var/run/" DEFAULT_SOCKET_BASENAME;
 #endif
 
-//! Basename of the socket file. The pid and ".sock" will be appended to this.
-static const char *DEFAULT_SOCKET_BASENAME = "ironbee_manager_controller.sock";
 
 
 /**
@@ -63,23 +64,24 @@ struct cmd_t {
 typedef struct cmd_t cmd_t;
 
 struct ib_engine_manager_control_channel_t {
-    ib_mm_t       mm;              /**< Manager with the lifetime of this. */
-    ib_manager_t *manager;         /**< The manager we will be controlling. */
-    const char   *sock_path;       /**< The path to the socket file. */
-    int           sock;            /**< Socket. -1 If not open. */
-    /**
-     * Message buffer.
-     */
+    ib_mm_t       mm;        /**< Memory manager. */
+    ib_manager_t *manager;   /**< The manager we will be controlling. */
+    const char   *sock_path; /**< The path to the socket file. */
+    int           sock;      /**< Socket. -1 If not open. */
+    /*! Message buffer. */
     uint8_t       msg[IB_ENGINE_MANAGER_CONTROL_CHANNEL_MAX_MSG_SZ+1];
-    size_t        msgsz;           /**< How much data is in msg. */
-    ib_hash_t    *cmds;            /**< Collection of cmd_t structures. */
+    size_t        msgsz;     /**< How much data is in msg. */
+    /**
+     * Collection of @ref cmd_t structures with command names as the index.
+     */
+    ib_hash_t    *cmds;
 };
 
 /**
  * Cleanup the manager controller.
  *
  * @param[in] cbdata The @ref ib_engine_manager_control_channel_t created by
- *            ib_engine_manager_control_channel__create().
+ *            ib_engine_manager_control_channel_create().
  */
 static void channel_cleanup(void *cbdata) {
     assert(cbdata != NULL);
@@ -92,6 +94,15 @@ static void channel_cleanup(void *cbdata) {
 
 /**
  * Echo command.
+ *
+ * @param[in] mm Memory manager for allocations of @a result and other
+ *            allocations that should live until the response is sent.
+ * @param[in] name The name this command is called by.
+ * @param[in] args The command arguments.
+ * @param[out] result This is set to @a args.
+ * @param[in] cbdata Callback data. Unused.
+ *
+ * @returns IB_OK.
  */
 static ib_status_t echo_cmd(
     ib_mm_t      mm,
@@ -101,6 +112,8 @@ static ib_status_t echo_cmd(
     void        *cbdata
 )
 {
+    assert(args != NULL);
+
     *result = args;
 
     return IB_OK;
@@ -108,6 +121,19 @@ static ib_status_t echo_cmd(
 
 /**
  * Disable manager command.
+ *
+ * Calls ib_manager_disable().
+ *
+ * @param[in] mm Memory manager for allocations of @a result and other
+ *            allocations that should live until the response is sent.
+ * @param[in] name The name this command is called by.
+ * @param[in] args The command arguments. Ignored.
+ * @param[out] result This is unchanged.
+ * @param[in] cbdata The @ref ib_manager_t * to act on.
+ *
+ * @sa ib_manager_disable()
+ *
+ * @returns The return of ib_manager_disable().
  */
 static ib_status_t manager_cmd_disable(
     ib_mm_t      mm,
@@ -126,6 +152,19 @@ static ib_status_t manager_cmd_disable(
 
 /**
  * Enable manager command.
+ *
+ * Calls ib_manager_enable().
+ *
+ * @param[in] mm Memory manager for allocations of @a result and other
+ *            allocations that should live until the response is sent.
+ * @param[in] name The name this command is called by.
+ * @param[in] args The command arguments. Ignored.
+ * @param[out] result This is unchanged.
+ * @param[in] cbdata The @ref ib_manager_t * to act on.
+ *
+ * @sa ib_manager_enable()
+ *
+ * @returns The return of ib_manager_enable().
  */
 static ib_status_t manager_cmd_enable(
     ib_mm_t      mm,
@@ -135,6 +174,7 @@ static ib_status_t manager_cmd_enable(
     void        *cbdata
 )
 {
+    assert(args != NULL);
     assert(cbdata != NULL);
 
     ib_manager_t *manager = (ib_manager_t *)cbdata;
@@ -143,7 +183,18 @@ static ib_status_t manager_cmd_enable(
 }
 
 /**
- * Create engine manager command.
+ * Call ib_manager_engine_create(); Args is the path to the config file.
+ *
+ * @param[in] mm Memory manager for allocations of @a result and other
+ *            allocations that should live until the response is sent.
+ * @param[in] name The name this command is called by.
+ * @param[in] args The path to the configuration file to use.
+ * @param[out] result This is unchanged.
+ * @param[in] cbdata The @ref ib_manager_t * to act on.
+ *
+ * @sa ib_manager_engine_create()
+ *
+ * @returns The return of ib_manager_engine_create().
  */
 static ib_status_t manager_cmd_engine_create(
     ib_mm_t      mm,
@@ -153,6 +204,7 @@ static ib_status_t manager_cmd_engine_create(
     void        *cbdata
 )
 {
+    assert(args != NULL);
     assert(cbdata != NULL);
 
     ib_manager_t *manager = (ib_manager_t *)cbdata;
@@ -161,7 +213,18 @@ static ib_status_t manager_cmd_engine_create(
 }
 
 /**
- * Clean manager command.
+ * Call ib_manager_engine_cleanup().
+ *
+ * @param[in] mm Memory manager for allocations of @a result and other
+ *            allocations that should live until the response is sent.
+ * @param[in] name The name this command is called by.
+ * @param[in] args Unused.
+ * @param[out] result This is unchanged.
+ * @param[in] cbdata The @ref ib_manager_t * to act on.
+ *
+ * @sa ib_manager_engine_cleanup()
+ *
+ * @returns The return of ib_manager_engine_cleanup().
  */
 static ib_status_t manager_cmd_cleanup(
     ib_mm_t      mm,
@@ -201,7 +264,7 @@ static void log_socket_error(
     assert(channel->manager != NULL);
 
     ib_engine_t *ib;
-    ib_status_t rc;
+    ib_status_t  rc;
 
     rc = ib_manager_engine_acquire(channel->manager, &ib);
     if (rc == IB_OK) {
@@ -216,49 +279,16 @@ static void log_socket_error(
     }
 }
 
-/**
- * Allocate and construct a socket path.
- *
- * @param[in] mm Allocate @a path from this.
- * @param[out] path Assign the path here.
- *
- * @returns
- * - IB_OK On success.
- * - IB_EALLOC on allocation errors.
- */
-static ib_status_t build_sock_path(ib_mm_t mm, const char **path)
-{
-    char   *sock_path;
-    size_t  sock_path_len;
-
-    /* Compute the string length (minus the end-of-line character). */
-    sock_path_len =
-        strlen(DEFAULT_SOCKET_PATH)     + /* Path. */
-        strlen(DEFAULT_SOCKET_BASENAME)   /* Basename length. */
-    ;
-
-    sock_path = ib_mm_alloc(mm, sock_path_len + 1);
-    if (sock_path == NULL) {
-        return IB_EALLOC;
-    }
-
-    /* Initialize sock_path to length zero. */
-    sock_path[0] = '\0';
-    strcat(sock_path, DEFAULT_SOCKET_PATH);
-    strcat(sock_path, DEFAULT_SOCKET_BASENAME);
-    sock_path[sock_path_len] = '\0';
-
-    *path = sock_path;
-    return IB_OK;
-}
-
 ib_status_t ib_engine_manager_control_channel_create(
     ib_engine_manager_control_channel_t **channel,
     ib_mm_t                               mm,
     ib_manager_t                         *manager
 )
 {
-    ib_status_t              rc;
+    assert(channel != NULL);
+    assert(manager != NULL);
+
+    ib_status_t                          rc;
     ib_engine_manager_control_channel_t *mc;
 
     mc = (ib_engine_manager_control_channel_t *)ib_mm_alloc(mm, sizeof(*mc));
@@ -271,17 +301,14 @@ ib_status_t ib_engine_manager_control_channel_create(
         return rc;
     }
 
-    mc->sock      = -1;
-    mc->manager   = manager;
-    mc->mm        = mm;
+    mc->sock    = -1;
+    mc->manager = manager;
+    mc->mm      = mm;
 
     /* Ensure that the last character is always terminated. */
     mc->msg[IB_ENGINE_MANAGER_CONTROL_CHANNEL_MAX_MSG_SZ] = '\0';
 
-    rc = build_sock_path(mm, &(mc->sock_path));
-    if (rc != IB_OK) {
-        return rc;
-    }
+    mc->sock_path = DEFAULT_SOCKET_PATH;
 
     ib_mm_register_cleanup(mm, channel_cleanup, mc);
 
@@ -295,8 +322,6 @@ ib_status_t ib_engine_manager_control_channel_stop(
 )
 {
     assert(channel != NULL);
-    assert(channel->manager != NULL);
-    assert(channel->msg != NULL);
 
     if (channel->sock >= 0) {
         int sysrc;
@@ -307,7 +332,7 @@ ib_status_t ib_engine_manager_control_channel_stop(
         /* Remove the socket file so external programs know it's closed. */
         sysrc = unlink(channel->sock_path);
         if (sysrc == -1 && errno != ENOENT) {
-            log_socket_error(channel, "unlink socket", strerror(errno));
+            log_socket_error(channel, "unlink", strerror(errno));
             return IB_EOTHER;
         }
     }
@@ -320,8 +345,6 @@ ib_status_t ib_engine_manager_control_channel_start(
 )
 {
     assert(channel != NULL);
-    assert(channel->manager != NULL);
-    assert(channel->msg != NULL);
 
     int sysrc;
     int sock;
@@ -334,7 +357,7 @@ ib_status_t ib_engine_manager_control_channel_start(
 
     sock = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (sock < 0) {
-        log_socket_error(channel, "create socket", strerror(errno));
+        log_socket_error(channel, "create", strerror(errno));
         return IB_EOTHER;
     }
 
@@ -344,7 +367,7 @@ ib_status_t ib_engine_manager_control_channel_start(
 
     sysrc = unlink(addr.sun_path);
     if (sysrc == -1 && errno != ENOENT) {
-        log_socket_error(channel, "unlink old socket", strerror(errno));
+        log_socket_error(channel, "unlink old", strerror(errno));
         return IB_EOTHER;
     }
 
@@ -374,16 +397,10 @@ ib_status_t ib_engine_manager_control_ready(
 )
 {
     assert(channel != NULL);
-    assert(channel->manager != NULL);
-    assert(channel->msg != NULL);
 
     int sysrc;
     const int nfds = channel->sock + 1;
-    struct timeval timeout;
-
-    /* Do not block. */
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 0;
+    struct timeval timeout = { 0, 0 };
 
     fd_set readfds;
     fd_set exceptfds;
@@ -398,7 +415,6 @@ ib_status_t ib_engine_manager_control_ready(
     }
 
     if (sysrc > 0) {
-        /* sysrc > 0. */
         if (FD_ISSET(channel->sock, &exceptfds)) {
             log_socket_error(channel, "error on", strerror(errno));
             return IB_EOTHER;
@@ -414,16 +430,35 @@ ib_status_t ib_engine_manager_control_ready(
     return IB_EAGAIN;
 }
 
+/**
+ * Process the command recieved and send a reply.
+ *
+ * @param[in] channel The channel.
+ * @param[in] cmdline Null-terminated command line.
+ * @param[in] cmdlinesz The string length of cmdline (not including \0).
+ *            This is provided because it is provided "for free" by
+ *            the datagram and does not mean that the string does not
+ *            terminate early with an embedded null.
+ * @param[in] src_addr The source address as reported by @c recvfrom.
+ * @param[in] addrlen The length of @a src_addr set by @c recvfrom.
+ *            If this is 0 then @c recvfrom did not get a valid
+ *            return address for the client and no reply witll be sent.
+ *
+ * @returns
+ * - IB_OK On success.
+ * - IB_EOTHER On failure to send reply.
+ */
 static ib_status_t handle_command(
     ib_engine_manager_control_channel_t *channel,
-    uint8_t           *cmdline,
-    size_t             cmdlinesz,
-    const struct sockaddr_un *src_addr,
-    socklen_t          addrlen
+    uint8_t                             *cmdline,
+    size_t                               cmdlinesz,
+    const struct sockaddr_un            *src_addr,
+    socklen_t                            addrlen
 )
 {
     assert(channel != NULL);
     assert(cmdline != NULL);
+    assert(src_addr != NULL);
 
     /* What we consider whitespace. */
     static const char *ws = "\r\n\t ";
@@ -452,13 +487,13 @@ static ib_status_t handle_command(
     }
 
     /* Skip over ws character. */
-    name    += strspn(name, ws);
+    name += strspn(name, ws);
 
     /* A command of all white space? Error. */
     if (*name == '\0') {
         log_socket_error(
             channel,
-            "with invalid command",
+            "with invalid command on",
             "Command name is entirely whitespace.");
         return IB_EINVAL;
     }
@@ -484,7 +519,7 @@ static ib_status_t handle_command(
 
     rc = ib_hash_get(channel->cmds, &cmd, name);
     if (rc == IB_ENOENT) {
-        log_socket_error(channel, "find command", name);
+        log_socket_error(channel, "find command on", name);
         result = "ENOENT: Command not found.";
     }
     else if (rc != IB_OK) {
@@ -504,16 +539,22 @@ static ib_status_t handle_command(
         result = ib_status_to_string(rc);
     }
 
-    written = sendto(
-        channel->sock,
-        (void *)result,
-        strlen(result),
-        0,
-        (const struct sockaddr *)src_addr,
-        addrlen);
-    if (written == -1) {
-        log_socket_error(channel, "write result response", strerror(errno));
-        return IB_EOTHER;
+    /* Only send a reply if we were given a valid reply address. */
+    if (addrlen > 0) {
+        written = sendto(
+            channel->sock,
+            (void *)result,
+            strlen(result),
+            0,
+            (const struct sockaddr *)src_addr,
+            addrlen);
+        if (written == -1) {
+            log_socket_error(
+                channel,
+                "write result response to",
+                strerror(errno));
+            return IB_EOTHER;
+        }
     }
 
     ib_mpool_lite_destroy(mp);
@@ -526,8 +567,6 @@ ib_status_t ib_engine_manager_control_recv(
 )
 {
     assert(channel != NULL);
-    assert(channel->manager != NULL);
-    assert(channel->msg != NULL);
 
     /* Ensure that the last byte is always null. */
     assert(channel->msg[IB_ENGINE_MANAGER_CONTROL_CHANNEL_MAX_MSG_SZ] == '\0');
@@ -579,6 +618,10 @@ ib_status_t ib_engine_manager_control_send(
     const char **response
 )
 {
+    assert(sock_path != NULL);
+    assert(message != NULL);
+    assert(response != NULL);
+
     ib_status_t        rc = IB_OK;
     size_t             message_len  = strlen(message);
     int                sock;
@@ -775,6 +818,7 @@ ib_status_t ib_engine_manager_control_channel_socket_path_set(
 )
 {
     assert(channel != NULL);
+    assert(path != NULL);
 
     const char *path_cpy = ib_mm_strdup(channel->mm, path);
 
