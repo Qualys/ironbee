@@ -39,11 +39,18 @@
 #include <errno.h>
 #include <unistd.h>
 
+#ifdef ENGINE_MANAGER_CONTROL_SOCK_PATH
+//! The directory that the @ref DEFAULT_SOCKET_BASENAME will be created in.
+static const char *DEFAULT_SOCKET_PATH =
+    IB_XSTRINGIFY(ENGINE_MANAGER_CONTROL_SOCK_PATH);
+#else
 //! The directory that the @ref DEFAULT_SOCKET_BASENAME will be created in.
 static const char *DEFAULT_SOCKET_PATH = "/var/run/";
+#endif
 
 //! Basename of the socket file. The pid and ".sock" will be appended to this.
 static const char *DEFAULT_SOCKET_BASENAME = "ironbee_manager_controller.sock";
+
 
 /**
  * Structure to hold and manipulate pointers to command implementations.

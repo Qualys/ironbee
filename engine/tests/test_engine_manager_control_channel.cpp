@@ -81,9 +81,8 @@ TEST_F(EngMgrCtrlChanTest, socket_path) {
         )
     );
 
-    /* Check the default. */
-    ASSERT_STREQ(
-        "/var/run/ironbee_manager_controller.sock",
+    /* Check that a default is defined. */
+    ASSERT_TRUE(
         ib_engine_manager_control_channel_socket_path_get(channel)
     );
 
