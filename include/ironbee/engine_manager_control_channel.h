@@ -104,9 +104,10 @@ typedef ib_status_t(*ib_engine_manager_control_channel_cmd_fn_t)(
  */
 ib_status_t DLL_PUBLIC ib_engine_manager_control_channel_create(
     ib_engine_manager_control_channel_t **channel,
-    ib_mm_t                   mm,
-    ib_manager_t             *manager
-);
+    ib_mm_t                               mm,
+    ib_manager_t                         *manager
+)
+NONNULL_ATTRIBUTE(1, 3);
 
 /**
  * Open a domain socket at /var/run/ironbee_channel.pid.sock.
@@ -117,7 +118,8 @@ ib_status_t DLL_PUBLIC ib_engine_manager_control_channel_create(
  */
 ib_status_t DLL_PUBLIC ib_engine_manager_control_channel_start(
     ib_engine_manager_control_channel_t *channel
-);
+)
+NONNULL_ATTRIBUTE(1);
 
 /**
  * Close a domain socket at /var/run/ironbee_channel.pid.sock.
@@ -128,7 +130,8 @@ ib_status_t DLL_PUBLIC ib_engine_manager_control_channel_start(
  */
 ib_status_t DLL_PUBLIC ib_engine_manager_control_channel_stop(
     ib_engine_manager_control_channel_t *channel
-);
+)
+NONNULL_ATTRIBUTE(1);
 
 /**
  * Check if data is available to receive.
@@ -142,7 +145,8 @@ ib_status_t DLL_PUBLIC ib_engine_manager_control_channel_stop(
  */
 ib_status_t DLL_PUBLIC ib_engine_manager_control_ready(
     ib_engine_manager_control_channel_t *channel
-);
+)
+NONNULL_ATTRIBUTE(1);
 
 /**
  * Recieve a command and process it.
@@ -156,7 +160,8 @@ ib_status_t DLL_PUBLIC ib_engine_manager_control_ready(
  */
 ib_status_t DLL_PUBLIC ib_engine_manager_control_recv(
     ib_engine_manager_control_channel_t *channel
-);
+)
+NONNULL_ATTRIBUTE(1);
 
 /**
  * Register @a fn with the channel as an available command.
@@ -177,7 +182,8 @@ ib_status_t DLL_PUBLIC ib_engine_manager_control_cmd_register(
     const char                                 *name,
     ib_engine_manager_control_channel_cmd_fn_t  fn,
     void                                       *cbdata
-);
+)
+NONNULL_ATTRIBUTE(1,2);
 
 /**
  * Register the @c echo command with this channel.
@@ -193,7 +199,8 @@ ib_status_t DLL_PUBLIC ib_engine_manager_control_cmd_register(
  */
 ib_status_t DLL_PUBLIC ib_engine_manager_control_echo_register(
     ib_engine_manager_control_channel_t *channel
-);
+)
+NONNULL_ATTRIBUTE(1);
 
 /**
  * Register the default manager control commands.
@@ -213,7 +220,8 @@ ib_status_t DLL_PUBLIC ib_engine_manager_control_echo_register(
  */
 ib_status_t DLL_PUBLIC ib_engine_manager_control_manager_ctrl_register(
     ib_engine_manager_control_channel_t *channel
-);
+)
+NONNULL_ATTRIBUTE(1);
 
 /**
  * Return the path to the socket being used by this channel.
@@ -225,7 +233,8 @@ ib_status_t DLL_PUBLIC ib_engine_manager_control_manager_ctrl_register(
  */
 const char DLL_PUBLIC *ib_engine_manager_control_channel_socket_path_get(
     const ib_engine_manager_control_channel_t *channel
-);
+)
+NONNULL_ATTRIBUTE(1);
 
 /**
  * Copy @a path as the socket path for this channel to use when it is opened.
@@ -240,6 +249,7 @@ const char DLL_PUBLIC *ib_engine_manager_control_channel_socket_path_get(
  * @param[in] channel The channel to set the socket for.
  * @param[in] path The path to the file that the socket should be created at.
  *            This string is copied using the channel's memory manager.
+ *            This string may never be NULL.
  *
  * @returns
  * - IB_OK On success.
@@ -248,7 +258,8 @@ const char DLL_PUBLIC *ib_engine_manager_control_channel_socket_path_get(
 ib_status_t DLL_PUBLIC ib_engine_manager_control_channel_socket_path_set(
     ib_engine_manager_control_channel_t *channel,
     const char                          *path
-);
+)
+NONNULL_ATTRIBUTE(1,2);
 
 /**
  * Client function to open a socket path, send a msg and recv a response.
@@ -278,7 +289,8 @@ ib_status_t ib_engine_manager_control_send(
     const char  *message,
     ib_mm_t      mm,
     const char **response
-);
+)
+NONNULL_ATTRIBUTE(1,2,4);
 
 /**
  * @}
