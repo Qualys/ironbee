@@ -280,12 +280,12 @@ static void log_socket_error(
 }
 
 ib_status_t ib_engine_manager_control_channel_create(
-    ib_engine_manager_control_channel_t **channel,
+    ib_engine_manager_control_channel_t **pchannel,
     ib_mm_t                               mm,
     ib_manager_t                         *manager
 )
 {
-    assert(channel != NULL);
+    assert(pchannel != NULL);
     assert(manager != NULL);
 
     ib_status_t                          rc;
@@ -312,7 +312,7 @@ ib_status_t ib_engine_manager_control_channel_create(
 
     ib_mm_register_cleanup(mm, channel_cleanup, mc);
 
-    *channel = mc;
+    *pchannel = mc;
     return IB_OK;
 }
 

@@ -92,7 +92,7 @@ typedef ib_status_t(*ib_engine_manager_control_channel_cmd_fn_t)(
  * The user must call ib_engine_manager_control_channel_start() to open the server
  * and start it processing events.
  *
- * @param[out] channel The created struct.
+ * @param[out] pchannel Pointer to the created struct.
  * @param[in] mm The memory manager to allocate out of. This is probably
  *            always the same as @a manager, but it does not need to be.
  * @param[in] manager The manager we will be controlling.
@@ -102,7 +102,7 @@ typedef ib_status_t(*ib_engine_manager_control_channel_cmd_fn_t)(
  * - IB_EALLOC On allocation errors.
  */
 ib_status_t DLL_PUBLIC ib_engine_manager_control_channel_create(
-    ib_engine_manager_control_channel_t **channel,
+    ib_engine_manager_control_channel_t **pchannel,
     ib_mm_t                               mm,
     ib_manager_t                         *manager
 )
@@ -110,6 +110,8 @@ NONNULL_ATTRIBUTE(1, 3);
 
 /**
  * Open a domain socket at /var/run/ironbee_channel.pid.sock.
+ *
+ * @param[in] channel The control channel
  *
  * @returns
  * - IB_OK On success.
@@ -122,6 +124,8 @@ NONNULL_ATTRIBUTE(1);
 
 /**
  * Close a domain socket at /var/run/ironbee_channel.pid.sock.
+ *
+ * @param[in] channel The control channel
  *
  * @returns
  * - IB_OK On success.
