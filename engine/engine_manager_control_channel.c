@@ -341,7 +341,8 @@ ib_status_t ib_engine_manager_control_channel_stop(
 }
 
 ib_status_t ib_engine_manager_control_channel_start(
-    ib_engine_manager_control_channel_t *channel
+    ib_engine_manager_control_channel_t *channel,
+    int                                 *psock
 )
 {
     assert(channel != NULL);
@@ -378,6 +379,9 @@ ib_status_t ib_engine_manager_control_channel_start(
     }
 
     channel->sock = sock;
+    if (psock != NULL) {
+        *psock = sock;
+    }
 
     return IB_OK;
 }

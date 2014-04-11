@@ -112,13 +112,15 @@ NONNULL_ATTRIBUTE(1, 3);
  * Open a domain socket at /var/run/ironbee_channel.pid.sock.
  *
  * @param[in] channel The control channel
+ * @param[out] psocket The created socket (or NULL).
  *
  * @returns
  * - IB_OK On success.
  * - Other on failure.
  */
 ib_status_t DLL_PUBLIC ib_engine_manager_control_channel_start(
-    ib_engine_manager_control_channel_t *channel
+    ib_engine_manager_control_channel_t *channel,
+    int                                 *psocket
 )
 NONNULL_ATTRIBUTE(1);
 
