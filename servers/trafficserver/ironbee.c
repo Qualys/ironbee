@@ -23,6 +23,7 @@
  */
 
 #include "ironbee_config_auto.h"
+#include "ts_private.h"
 
 #include <ironbee/flags.h>
 
@@ -62,12 +63,9 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
-#if defined(__cplusplus) && !defined(__STDC_FORMAT_MACROS)
-/* C99 requires that inttypes.h only exposes PRI* macros
- * for C++ implementations if this is defined: */
-#define __STDC_FORMAT_MACROS
-#endif
-#include <inttypes.h>
+/* This gets the PRI*64 types */
+# define __STDC_FORMAT_MACROS 1
+# include <inttypes.h>
 
 #include <ironbee/engine.h>
 #include <ironbee/engine_manager.h>
@@ -92,34 +90,19 @@ static void addr2str(const struct sockaddr *addr, char *str, int *port);
 
 typedef enum {LE_N, LE_RN, LE_ANY} http_lineend_t;
 
-/**
- * Plugin global data
- */
-typedef struct {
-    TSTextLogObject  logger;         /**< TrafficServer log object */
-    ib_manager_t    *manager;        /**< IronBee engine manager object */
-    size_t           max_engines;    /**< Max # of simultaneous engines */
-    const char      *config_file;    /**< IronBee configuration file */
-    const char      *log_file;       /**< IronBee log file */
-    int              log_level;      /**< IronBee log level */
-    bool             log_disable;    /**< Disable logging? */
-
-    const char      *txlogfile;
-    TSTextLogObject  txlogger;
-} module_data_t;
-
 /* Global module data */
-static module_data_t module_data =
+static ibts_module_data_t module_data =
 {
-    NULL,                            /* .logger */
-    NULL,                            /* .manager */
-    IB_MANAGER_DEFAULT_MAX_ENGINES,  /* .max_engines */
-    NULL,                            /* .config_file */
-    NULL,                            /* .log_file */
-    IB_LOG_WARNING,                  /* .log_level */
-    false,                           /* .log_disable */
-    DEFAULT_TXLOG,
-    NULL
+    .ib_initialized = false,
+    .logger = NULL,
+    .manager = NULL,
+    .max_engines = IB_MANAGER_DEFAULT_MAX_ENGINES,
+    .config_file = NULL,
+    .log_file = NULL,
+    .log_level = IB_LOG_WARNING,
+    .log_disable = false,
+    .txlogfile = DEFAULT_TXLOG,
+    .txlogger = NULL,
 };
 
 typedef enum {
@@ -2549,8 +2532,8 @@ static ib_status_t logger_format(
         return IB_DECLINED;
     }
 
-    module_data_t   *mod_data = (module_data_t *)cbdata;
-    TSTextLogObject  logger = mod_data->logger;
+    ibts_module_data_t *mod_data = (ibts_module_data_t *)cbdata;
+    TSTextLogObject       logger = mod_data->logger;
 
     if (logger == NULL) {
         return IB_DECLINED;
@@ -2566,7 +2549,7 @@ static ib_status_t logger_format(
             ib_logger,
             rec,
             log_msg,
-            log_msg_sz,
+            ((log_msg_sz > 255) ? 255 : log_msg_sz), /* TODO NRL Hack */
             &std_msg,
             NULL);
         if (rc != IB_OK) {
@@ -2601,8 +2584,8 @@ static ib_status_t logger_close(
     if (cbdata == NULL) {
         return IB_OK;
     }
-    module_data_t   *mod_data = (module_data_t *)cbdata;
-    TSTextLogObject  logger = mod_data->logger;
+    ibts_module_data_t *mod_data = (ibts_module_data_t *)cbdata;
+    TSTextLogObject       logger = mod_data->logger;
 
     if (logger != NULL) {
         TSTextLogObjectFlush(logger);
@@ -2617,7 +2600,7 @@ static ib_status_t logger_close(
  * @param[in] element A @ref ib_logger_standard_msg_t holding
  *            a serialized transaction log to be written to the
  *            Traffic Server transaction log.
- * @param[in] cbdata A @ref module_data_t.
+ * @param[in] cbdata A @ref ibts_module_data_t.
  */
 static void txlog_record_element(
     void *element,
@@ -2628,7 +2611,7 @@ static void txlog_record_element(
     assert(cbdata != NULL);
 
     ib_logger_standard_msg_t *msg      = (ib_logger_standard_msg_t *)element;
-    module_data_t            *mod_data = (module_data_t *)cbdata;
+    ibts_module_data_t            *mod_data = (ibts_module_data_t *)cbdata;
 
     /* FIXME - expand msg->msg with Traffic Server variables. */
     /* I don't understand what is TBD here! */
@@ -2659,7 +2642,7 @@ static void txlog_record_element(
  *
  * @param[in] logger The logger.
  * @param[in] writer The log writer.
- * @param[in] cbdata Callback data. @ref module_data_t.
+ * @param[in] cbdata Callback data. @ref ibts_module_data_t.
  *
  * @returns
  * - IB_OK On success.
@@ -2671,7 +2654,7 @@ static ib_status_t txlog_record(
     void               *cbdata
 )
 {
-    module_data_t *mod_data = (module_data_t *)cbdata;
+    ibts_module_data_t *mod_data = (ibts_module_data_t *)cbdata;
     assert(logger != NULL);
     assert(writer != NULL);
     assert(cbdata != NULL);
@@ -2696,7 +2679,7 @@ static ib_status_t txlog_record(
  *
  * @param[out] manager The manager.
  * @param[in] ib The unconfigured engine.
- * @param[in] cbdata @ref module_data_t.
+ * @param[in] cbdata @ref ibts_module_data_t.
  *
  * @returns
  * - IB_OK On success.
@@ -2712,9 +2695,9 @@ static ib_status_t engine_preconfig_fn(
     assert(ib != NULL);
     assert(cbdata != NULL);
 
-    ib_status_t         rc;
-    ib_logger_format_t *iblog_format;
-    module_data_t      *mod_data = (module_data_t *)cbdata;
+    ib_status_t           rc;
+    ib_logger_format_t   *iblog_format;
+    ibts_module_data_t *mod_data = (ibts_module_data_t *)cbdata;
 
     /* Clear all existing loggers. */
     rc = ib_logger_writer_clear(ib_engine_logger_get(ib));
@@ -2755,7 +2738,7 @@ static ib_status_t engine_preconfig_fn(
  *
  * @param[out] manager The manager.
  * @param[in] ib The configured engine.
- * @param[in] cbdata @ref module_data_t.
+ * @param[in] cbdata @ref ibts_module_data_t.
  *
  * @returns
  * - IB_OK On success.
@@ -2773,7 +2756,7 @@ static ib_status_t engine_postconfig_fn(
 
     int rv;
     ib_status_t         rc;
-    module_data_t      *mod_data = (module_data_t *)cbdata;
+    ibts_module_data_t      *mod_data = (ibts_module_data_t *)cbdata;
     ib_logger_format_t *txlog_format;
 
     rc = ib_logger_fetch_format(
@@ -2844,22 +2827,44 @@ static void addr2str(const struct sockaddr *addr, char *str, int *port)
 #define TRACEFILE NULL
 
 /**
- * Handle ATS shutdown for IronBee plugin.
+ * Handle flush from the manager API or ibexit()
  *
- * Registered via atexit() during initialization, destroys the IB engine,
- * etc.
- *
+ * @param[in] cbdata Callback data (module data)
  */
-static void ibexit(void)
+#if 0
+static void flush_logs(void *cbdata)
 {
-    module_data_t *mod_data = &module_data;
+    assert(cbdata != NULL);
+    ibts_module_data_t *mod_data = cbdata;
 
-    TSDebug("ironbee", "ibexit()");
+    if (mod_data->logger != NULL) {
+        TSTextLogObjectFlush(mod_data->logger);
+    }
+    if (mod_data->txlogger != NULL) {
+        TSTextLogObjectFlush(mod_data->txlogger);
+    }
+}
+#endif
+
+/**
+ * Destroy the engine manager from the command socket or ibexit()
+ *
+ * @param[in] cbdata Callback data (module data)
+ */
+static void destroy_manager(void *cbdata)
+{
+    assert(cbdata != NULL);
+    ibts_module_data_t *mod_data = cbdata;
+
+    TSDebug("ironbee", "destroy_manager(): md=%p l=%p m=%p tl=%p ib=%s\n",
+            mod_data, mod_data->logger, mod_data->manager, mod_data->txlogger,
+            (mod_data->ib_initialized ? "Initialized" : "Not initialized") );
     if (mod_data->logger != NULL) {
         TSTextLogObjectFlush(mod_data->logger);
     }
     if (mod_data->manager != NULL) {
         ib_manager_destroy(mod_data->manager);
+        mod_data->manager = NULL;
     }
     if (mod_data->logger != NULL) {
         TSTextLogObjectFlush(mod_data->logger);
@@ -2869,12 +2874,38 @@ static void ibexit(void)
     if (mod_data->txlogger != NULL) {
         TSTextLogObjectFlush(mod_data->txlogger);
         TSTextLogObjectDestroy(mod_data->txlogger);
+        mod_data->txlogger = NULL;
     }
     if (mod_data->log_file != NULL) {
         free((void *)mod_data->log_file);
         mod_data->log_file = NULL;
     }
-    ib_shutdown();
+    if (mod_data->config_file != NULL) {
+        free((void *)mod_data->config_file);
+        mod_data->config_file = NULL;
+    }
+    if (mod_data->txlogfile != NULL) {
+        free((void *)mod_data->txlogfile);
+        mod_data->txlogfile = NULL;
+    }
+
+    if (mod_data->ib_initialized) {
+        ib_shutdown();
+        mod_data->ib_initialized = false;
+    }
+}
+
+/**
+ * Handle ATS shutdown for IronBee plugin.
+ *
+ * Registered via atexit() during initialization, destroys the IB engine,
+ * etc.
+ *
+ */
+static void ibexit(void)
+{
+    TSDebug("ironbee", "ibexit()");
+    destroy_manager(&module_data);
     TSDebug("ironbee", "ibexit() done");
 }
 
@@ -2890,7 +2921,7 @@ static void ibexit(void)
  * @return  Success/Failure parsing the config line
  */
 static ib_status_t read_ibconf(
-    module_data_t *mod_data,
+    ibts_module_data_t *mod_data,
     int            argc,
     const char    *argv[]
 )
@@ -2901,6 +2932,7 @@ static ib_status_t read_ibconf(
     mod_data->log_level = 4;
 
     /* const-ness mismatch looks like an oversight, so casting should be fine */
+    optind = 1;    /* Reset */
     while (c = getopt(argc, (char**)argv, "l:Lv:d:m:x:"), c != -1) {
         switch(c) {
         case 'L':
@@ -2948,6 +2980,14 @@ static ib_status_t read_ibconf(
         return IB_EINVAL;
     }
 }
+
+/*
+ * Data passed to the command sock plugin
+ */
+const DLL_PUBLIC ibts_shared_data_t IBTS_SHARED_DATA = {
+    .module_data = &module_data,
+};
+
 /**
  * Initialize IronBee for ATS.
  *
@@ -2957,13 +2997,14 @@ static ib_status_t read_ibconf(
  *
  * @returns status
  */
-static int ironbee_init(module_data_t *mod_data)
+static int ironbee_init(ibts_module_data_t *mod_data)
 {
     /* grab from httpd module's post-config */
     ib_status_t rc;
     int rv;
 
     if (!mod_data->log_disable) {
+        assert(mod_data->logger == NULL);
         /* success is documented as TS_LOG_ERROR_NO_ERROR but that's undefined.
          * It's actually a TS_SUCCESS (proxy/InkAPI.cc line 6641).
          */
@@ -2981,9 +3022,11 @@ static int ironbee_init(module_data_t *mod_data)
     if (rc != IB_OK) {
         return rc;
     }
+    mod_data->ib_initialized = true;
 
     /* Create the IronBee engine manager */
     TSDebug("ironbee", "Creating IronBee engine manager");
+    assert(mod_data->manager == NULL);
     rc = ib_manager_create(&(mod_data->manager),   /* Engine Manager */
                            &ibplugin,              /* Server object */
                            mod_data->max_engines); /* Default max */
